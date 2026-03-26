@@ -139,6 +139,8 @@ Workspace images export these key path variables:
 - `GKI_CACHE_ROOT`: reusable cache root, default `/cache`
 - `GKI_OUTPUT_ROOT`: recommended output root, default `/out`
 
+The workspace entrypoint also adds the current working directory, `GKI_WORKSPACE_ROOT`, `GKI_SOURCE_ROOT`, and `GKI_BUILDER_ROOT` to Git `safe.directory` so mounted workspaces do not fail with `dubious ownership` errors.
+
 Run a command inside the workspace image:
 
 ```bash
