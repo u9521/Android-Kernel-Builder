@@ -8,8 +8,8 @@ ARG TARGET_CONFIG=configs/targets/android15-6.6.toml
 
 ENV GKI_BUILDER_ROOT=/opt/gki-builder \
     GKI_WORKSPACE_ROOT=/workspace \
-    GKI_CACHE_ROOT=/cache \
-    GKI_OUTPUT_ROOT=/out \
+    GKI_CACHE_ROOT=/workspace/.cache \
+    GKI_OUTPUT_ROOT=/workspace/out \
     GKI_TARGET_CONFIG=/opt/gki-builder/${TARGET_CONFIG} \
     GKI_ENV_FILE=/etc/gki-builder.env
 
@@ -36,17 +36,17 @@ env_file.write_text(
     encoding="utf-8",
 )
 PY
-RUN mkdir -p /workspace /cache /var/tmp/gki-warmup-out \
+RUN mkdir -p /workspace/.cache /workspace/.warmup-out \
     && gki-builder prepare-workspace \
         --target-config ${TARGET_CONFIG} \
         --workspace /workspace \
-        --cache-root /cache \
+        --cache-root /workspace/.cache \
     && gki-builder build \
         --target-config ${TARGET_CONFIG} \
         --workspace /workspace \
-        --cache-root /cache \
-        --output-root /var/tmp/gki-warmup-out \
-    && rm -rf /var/tmp/gki-warmup-out
+        --cache-root /workspace/.cache \
+        --output-root /workspace/.warmup-out \
+    && rm -rf /workspace/.warmup-out
 
 WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "/opt/gki-builder/docker/entrypoint.sh"]

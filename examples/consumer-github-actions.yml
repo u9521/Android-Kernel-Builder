@@ -29,7 +29,8 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD":/consumer \
-            -v "$PWD/out":/out \
+            -v "$PWD/.cache":/workspace/.cache \
+            -v "$PWD/out":/workspace/out \
             ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
             bash -lc '
               cd "$GKI_SOURCE_ROOT" &&

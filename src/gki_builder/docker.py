@@ -62,9 +62,9 @@ def run_container(
         "-v",
         f"{workspace_root.resolve()}:/workspace",
         "-v",
-        f"{cache_root.resolve()}:/cache",
+        f"{cache_root.resolve()}:/workspace/.cache",
         "-v",
-        f"{output_root.resolve()}:/out",
+        f"{output_root.resolve()}:/workspace/out",
         image,
         *command,
     ]

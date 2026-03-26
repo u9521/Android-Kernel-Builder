@@ -138,10 +138,12 @@ Workspace images export these key path variables:
 - `GKI_TARGET_CONFIG`: resolved target config inside the image
 - `GKI_WORKSPACE_ROOT`: synced workspace root, default `/workspace`
 - `GKI_SOURCE_ROOT`: kernel source directory resolved from the target config
-- `GKI_CACHE_ROOT`: reusable cache root, default `/cache`
-- `GKI_OUTPUT_ROOT`: recommended output root, default `/out`
+- `GKI_CACHE_ROOT`: reusable cache root, default `/workspace/.cache`
+- `GKI_OUTPUT_ROOT`: recommended output root, default `/workspace/out`
 
-The workspace entrypoint also adds the current working directory, `GKI_WORKSPACE_ROOT`, `GKI_SOURCE_ROOT`, and `GKI_BUILDER_ROOT` to Git `safe.directory` so mounted workspaces do not fail with `dubious ownership` errors.
+The workspace entrypoint also adds the current working directory, `GKI_WORKSPACE_ROOT`, `GKI_SOURCE_ROOT`, `GKI_BUILDER_ROOT`, and the example consumer mount path `/consumer` to Git `safe.directory` so mounted workspaces do not fail with `dubious ownership` errors.
+
+By default, the container now keeps the reusable cache under `/workspace/.cache` and writes build artifacts under `/workspace/out`, so the main working files stay grouped under `/workspace`.
 
 Run a command inside the workspace image:
 
@@ -172,7 +174,7 @@ Because workspace images now perform one warmup build during image creation, exp
 1. pull the pre-warmed workspace image
 2. apply project-specific patches inside `$GKI_SOURCE_ROOT`
 3. run `gki-builder build` against the mounted workspace
-4. collect artifacts from the mounted `$GKI_OUTPUT_ROOT`
+4. collect artifacts from the mounted `$GKI_OUTPUT_ROOT` such as `/workspace/out/<dist_dir>` inside the container
 
 See `examples/consumer-github-actions.yml` for a minimal pattern.
 
