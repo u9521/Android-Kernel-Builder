@@ -13,16 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     bc \
     bison \
-    build-essential \
     ccache \
     ca-certificates \
-    clang \
     curl \
     file \
     flex \
     git \
-    gnupg \
-    lld \
     lz4 \
     make \
     openssh-client \
@@ -39,7 +35,9 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel
 
 RUN curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo \
-    && chmod +x /usr/local/bin/repo
+    && chmod +x /usr/local/bin/repo \
+    && printf 'repo version: ' \
+    && repo --version
 
 WORKDIR /workspace
 

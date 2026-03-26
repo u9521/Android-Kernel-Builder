@@ -23,14 +23,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull pre-warmed workspace image
-        run: docker pull ghcr.io/OWNER/gki-workspace:android15-6.6-latest
+        run: docker pull ghcr.io/<owner>/gki-workspace:android15-6.6-latest
 
       - name: Apply source patch and run incremental build
         run: |
           docker run --rm \
             -v "$PWD":/consumer \
             -v "$PWD/out":/out \
-            ghcr.io/OWNER/gki-workspace:android15-6.6-latest \
+            ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
             bash -lc '
               cd "$GKI_SOURCE_ROOT" &&
               git apply /consumer/patches/my-change.patch &&

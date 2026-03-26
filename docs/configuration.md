@@ -106,7 +106,7 @@ Controls how `repo init` and `repo sync` prepare source code.
 - Local mode is now init-manifest only.
 - The tool runs the equivalent of:
   1. `repo init -u <url> [-b <branch>] -m <path> [--depth=1 when minimal=true]`
-  2. `repo sync [with minimal flags when minimal=true]`
+  2. `repo sync --trace [with minimal flags when minimal=true]`
 - This is intentionally close to your previous CI setup.
 
 ### Why local mode still needs `url`
@@ -179,7 +179,16 @@ Controls how compilation runs after the workspace is ready.
   - `thin`
   - `none`
 
-For newer kernels, `none` may be required depending on the build target and branch.
+LTO defaults are branch-specific. According to the Kleaf LTO guide, GKI `gki_defconfig`
+on `android14-6.1` and newer disables LTO by default, and this should only be changed
+when the trade-offs are understood.
+
+For development and patch iteration, `lto = "none"` often reduces build time.
+The same guide also notes there may be incremental build issues with LTO caching, so
+if incremental rebuild behavior looks suspicious, verify whether the branch expects LTO
+to stay disabled.
+
+Reference: `https://android.googlesource.com/kernel/build/+/refs/heads/master/kleaf/docs/lto.md`
 
 ## `[cache]`
 

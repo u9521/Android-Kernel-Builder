@@ -25,7 +25,7 @@ the tool runs the equivalent of:
 
 ```bash
 repo init --depth=1 -u <url> -b <branch> -m <file>
-repo sync -c --no-clone-bundle --no-tags ...
+repo sync --trace -c --no-clone-bundle --no-tags ...
 ```
 
 Use this for standard upstream GKI branches.
@@ -52,7 +52,7 @@ the tool does this:
 
 ```bash
 repo init --depth=1 -u <url> -b <branch> -m <local-manifest-path>
-repo sync -c --no-clone-bundle --no-tags ...
+repo sync --trace -c --no-clone-bundle --no-tags ...
 ```
 
 This matches the old CI style more closely: the checked-in local XML is passed directly to `repo init -m` and acts as the active manifest entry.

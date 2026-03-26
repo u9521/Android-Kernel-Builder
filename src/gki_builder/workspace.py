@@ -51,12 +51,10 @@ def prepare_workspace(
 
 
 def build_environment(target: TargetConfig, cache_root: Path) -> dict[str, str]:
-    return current_environment(
-        {
-            "USE_CCACHE": "1",
-            "CCACHE_DIR": str((cache_root / target.cache.ccache_dir).resolve()),
-        }
-    )
+    return current_environment({
+        "USE_CCACHE": "1",
+        "CCACHE_DIR": str((cache_root / target.cache.ccache_dir).resolve()),
+    })
 
 
 def _repo_init(target: TargetConfig, source_dir: Path, repo_reference_dir: Path) -> None:
@@ -80,18 +78,14 @@ def _repo_init(target: TargetConfig, source_dir: Path, repo_reference_dir: Path)
 
 
 def _repo_sync_command(target: TargetConfig, jobs: int) -> list[str]:
-    command = ["repo", "sync", f"-j{jobs}"]
+    command = ["repo", "--trace", "sync", f"-j{jobs}"]
     if target.manifest.minimal:
         command.extend(["-c", "--no-clone-bundle", "--no-tags"])
     return command
 
 
 def _auto_fix_remote_deprecated_branch(target: TargetConfig, source_dir: Path) -> str | None:
-    if (
-        target.manifest.source != "remote"
-        or not target.manifest.branch
-        or not target.manifest.autodetect_deprecated
-    ):
+    if (target.manifest.source != "remote" or not target.manifest.branch or not target.manifest.autodetect_deprecated):
         return None
 
     kernel_branch = _kernel_project_branch_name(target.manifest.branch)

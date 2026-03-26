@@ -50,7 +50,7 @@ name = "avd-android15"
 
 [manifest]
 source = "local"
-path = "../../manifests/avd/local_manifests/avd-android-15-6.6_arm64.xml"
+path = "../../manifests/avd/avd-android-15-6.6_arm64.xml"
 url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android15-6.6"
 minimal = true
@@ -66,6 +66,8 @@ Kleaf builds in this repository rely on the kernel source tree's `tools/bazel`; 
 Build targets must declare `build.system` explicitly as either `kleaf` or `legacy`
 
 You can set `build.jobs` in a target file to control compile parallelism. If omitted, builds use the maximum available CPU threads.
+
+When tuning `build.lto`, remember that LTO defaults are branch-specific. The Kleaf LTO guide notes that GKI `gki_defconfig` on `android14-6.1` and newer disables LTO by default. For development and iterative patching, `lto = "none"` is often the safer and faster choice, and it may also avoid incremental cache issues described in the upstream guide: `https://android.googlesource.com/kernel/build/+/refs/heads/master/kleaf/docs/lto.md`
 
 ## Local Usage
 
@@ -110,19 +112,21 @@ gki-builder build \
 Build the base image:
 
 ```bash
-gki-builder docker-build-base --tag ghcr.io/OWNER/gki-base:bookworm
+gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 ```
 
 Build the workspace image:
 
 ```bash
 gki-builder docker-build-workspace \
-  --tag ghcr.io/OWNER/gki-workspace:android15-6.6-latest \
-  --base-image ghcr.io/OWNER/gki-base:bookworm \
+  --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
+  --base-image ghcr.io/<owner>/gki-base:bookworm \
   --target-config configs/targets/android15-6.6.toml
 ```
 
 During workspace image build, the Dockerfile now runs `prepare-workspace` and one `gki-builder build` warmup pass so the published image already contains prepared source plus warmed compile caches.
+
+The warmup build mainly helps Bazel and ccache reuse previous work. If a consumer repository only changes a small patch set, especially in a limited part of the kernel tree, more cached actions can be reused and rebuilds are usually much faster. Large patch sets, broad config changes, toolchain changes, or target changes will reduce cache hit rates and the speedup will be smaller.
 
 The `build-workspace-image` GitHub Actions workflow expects only the target name, for example `android15-6.6`, and resolves it from `configs/targets/<name>.toml` automatically.
 
@@ -139,7 +143,7 @@ Run a command inside the workspace image:
 
 ```bash
 gki-builder docker-run \
-  --image ghcr.io/OWNER/gki-workspace:android15-6.6-latest \
+  --image ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
   --workspace .workspace \
   --cache-root .cache \
   --output-root out \
