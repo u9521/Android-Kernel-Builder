@@ -219,7 +219,7 @@ Controls the layout under the chosen `--workspace` root.
 
 ### `metadata_dir`
 
-- Where this tool writes metadata such as `workspace.json`.
+- Where this tool writes metadata such as `workspace.json` and `disk-usage.json`.
 - Example final path: `.workspace/.gki-builder/<target>/workspace.json`
 
 ## Notes And Pitfalls

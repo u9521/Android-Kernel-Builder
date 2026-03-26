@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 
 from .targets import TargetConfig
-from .utils import ensure_directory, run_command
+from .utils import directory_size_bytes, ensure_directory, format_bytes, run_command, write_json
 from .workspace import build_environment
 
 
@@ -31,7 +32,59 @@ def build_kernel(
     else:
         _build_kleaf(target, source_dir, cache_root, output_dir, env)
 
+    usage_report = analyze_workspace_usage(target, workspace_root.resolve(), cache_root, output_dir)
+    metadata_dir = ensure_directory((workspace_root / target.workspace.metadata_dir / target.name).resolve())
+    write_json(metadata_dir / "disk-usage.json", usage_report)
+    _print_usage_report(usage_report)
+
     return output_dir
+
+
+def analyze_workspace_usage(
+    target: TargetConfig,
+    workspace_root: Path,
+    cache_root: Path,
+    output_dir: Path,
+) -> dict[str, object]:
+    source_dir = (workspace_root / target.workspace.source_dir).resolve()
+    metadata_dir = (workspace_root / target.workspace.metadata_dir / target.name).resolve()
+    repo_metadata_dir = source_dir / ".repo"
+    repo_reference_dir = (cache_root / target.cache.repo_dir).resolve()
+    bazel_cache_dir = (cache_root / target.cache.bazel_dir).resolve()
+    ccache_dir = (cache_root / target.cache.ccache_dir).resolve()
+
+    source_total = directory_size_bytes(source_dir)
+    repo_metadata = directory_size_bytes(repo_metadata_dir)
+    source_checkout = max(source_total - repo_metadata, 0)
+    cache_total = directory_size_bytes(cache_root)
+
+    sections = {
+        "source": _usage_entry(source_dir, source_checkout),
+        "repo_metadata": _usage_entry(repo_metadata_dir, repo_metadata),
+        "cache": _usage_entry(cache_root, cache_total),
+        "cache_repo_reference": _usage_entry(repo_reference_dir, directory_size_bytes(repo_reference_dir)),
+        "cache_bazel": _usage_entry(bazel_cache_dir, directory_size_bytes(bazel_cache_dir)),
+        "cache_ccache": _usage_entry(ccache_dir, directory_size_bytes(ccache_dir)),
+        "output": _usage_entry(output_dir, directory_size_bytes(output_dir)),
+        "workspace_metadata": _usage_entry(metadata_dir, directory_size_bytes(metadata_dir)),
+    }
+    return {
+        "target": target.name,
+        "sections": sections,
+    }
+
+
+def _usage_entry(path: Path, size_bytes: int) -> dict[str, object]:
+    return {
+        "path": str(path),
+        "bytes": size_bytes,
+        "human": format_bytes(size_bytes),
+    }
+
+
+def _print_usage_report(report: dict[str, object]) -> None:
+    print("workspace disk usage:", flush=True)
+    print(json.dumps(report, indent=2, sort_keys=True), flush=True)
 
 
 def _build_legacy(

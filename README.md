@@ -107,6 +107,8 @@ gki-builder build \
   --output-root out
 ```
 
+After each build, the CLI prints a disk usage report and writes `.gki-builder/<target>/disk-usage.json` inside the workspace root. The report breaks down source checkout size, `.repo` metadata, cache usage, build outputs, and workspace metadata.
+
 ## Docker Usage
 
 Build the base image:
@@ -161,7 +163,7 @@ Recommended image split:
 
 Keep tags stable enough that consumers can intentionally pin to a source baseline.
 
-When a workspace image is produced, the CLI also writes target metadata under `.gki-builder/<target>/workspace.json` inside the workspace root. That makes it easier to inspect which manifest and cache layout the image was built from.
+When a workspace image is produced, the CLI also writes target metadata under `.gki-builder/<target>/workspace.json` and disk usage details under `.gki-builder/<target>/disk-usage.json` inside the workspace root. That makes it easier to inspect which manifest and cache layout the image was built from.
 
 Because workspace images now perform one warmup build during image creation, expect workspace image builds to take longer than base image builds.
 

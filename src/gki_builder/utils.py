@@ -17,6 +17,35 @@ def ensure_directory(path: Path) -> Path:
     return path
 
 
+def directory_size_bytes(path: Path, *, exclude_names: set[str] | None = None) -> int:
+    if not path.exists():
+        return 0
+
+    excluded = exclude_names or set()
+    total = 0
+    for root, dirnames, filenames in os.walk(path):
+        dirnames[:] = [dirname for dirname in dirnames if dirname not in excluded]
+        root_path = Path(root)
+
+        for filename in filenames:
+            file_path = root_path / filename
+            if file_path.name in excluded or file_path.is_symlink():
+                continue
+            total += file_path.stat().st_size
+    return total
+
+
+def format_bytes(size: int) -> str:
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    value = float(size)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024
+
+
 def resolve_path(base_dir: Path, value: str | None) -> Path | None:
     if value is None:
         return None
