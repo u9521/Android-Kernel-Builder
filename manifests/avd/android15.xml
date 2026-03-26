@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <include name="default.xml" />
+
+  <!--
+    Example local manifest for AVD-oriented syncs.
+    Keep the file in this repository so image builds do not depend on
+    discovering a remote manifest path at runtime.
+  -->
+
+  <!--
+  <project
+      name="kernel/common-modules/virtual-device"
+      path="common-modules/virtual-device"
+      remote="aosp"
+      revision="refs/heads/android15-6.6" />
+  -->
+</manifest>

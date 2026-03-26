@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 u9521
+
+name: build-workspace-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target config name without .toml
+        required: true
+        default: android15-6.6
+      tag:
+        description: Image tag suffix
+        required: true
+        default: android15-6.6-latest
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve target config
+        id: target
+        run: |
+          TARGET_CONFIG="configs/targets/${{ inputs.target }}.toml"
+          if [ ! -f "$TARGET_CONFIG" ]; then
+            echo "::error::Missing target config: $TARGET_CONFIG"
+            echo "Available configs:"
+            ls configs/targets/*.toml
+            exit 1
+          fi
+          echo "target_config=$TARGET_CONFIG" >> "$GITHUB_OUTPUT"
+
+      - name: Build, warm, and push workspace image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/workspace.Dockerfile
+          build-args: |
+            BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm
+            TARGET_CONFIG=${{ steps.target.outputs.target_config }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/gki-workspace:${{ inputs.tag }}

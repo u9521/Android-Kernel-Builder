@@ -1,0 +1,28 @@
+# WARNING: Example target configuration. Review and adjust before use.
+
+name = "android15-6.6"
+
+[manifest]
+source = "remote"
+url = "https://android.googlesource.com/kernel/manifest"
+branch = "common-android15-6.6"
+file = "default.xml"
+autodetect_deprecated = true
+
+[build]
+system = "kleaf"
+target = "//common:kernel_{arch}_dist"
+dist_dir = "gki"
+dist_flag = "dist_dir"
+arch = "aarch64"
+jobs = 32
+lto = "thin"
+
+[cache]
+repo_dir = "repo"
+bazel_dir = "bazel"
+ccache_dir = "ccache"
+
+[workspace]
+source_dir = "android-kernel"
+metadata_dir = ".gki-builder"

@@ -1,0 +1,25 @@
+name = "avd-android14-6.1-x64"
+
+[manifest]
+source = "local"
+url = "https://android.googlesource.com/kernel/manifest"
+branch = "common-android14-6.1"
+path = "../../manifests/avd/avd-android-14-6.1_x64.xml"
+minimal = true
+
+[build]
+system = "kleaf"
+target = "//common-modules/virtual-device:virtual_device_{arch}_dist"
+dist_dir = "avd/android14-6.1-x64"
+dist_flag = "dist_dir"
+arch = "x86_64"
+lto = "thin"
+
+[cache]
+repo_dir = "repo"
+bazel_dir = "bazel"
+ccache_dir = "ccache"
+
+[workspace]
+source_dir = "android-kernel"
+metadata_dir = ".gki-builder"

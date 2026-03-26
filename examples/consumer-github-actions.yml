@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 u9521
+
+name: consumer-gki-build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull pre-warmed workspace image
+        run: docker pull ghcr.io/OWNER/gki-workspace:android15-6.6-latest
+
+      - name: Apply source patch and run incremental build
+        run: |
+          docker run --rm \
+            -v "$PWD":/consumer \
+            -v "$PWD/out":/out \
+            ghcr.io/OWNER/gki-workspace:android15-6.6-latest \
+            bash -lc '
+              cd "$GKI_SOURCE_ROOT" &&
+              git apply /consumer/patches/my-change.patch &&
+              gki-builder build \
+                --target-config "$GKI_TARGET_CONFIG" \
+                --workspace "$GKI_WORKSPACE_ROOT" \
+                --cache-root "$GKI_CACHE_ROOT" \
+                --output-root "$GKI_OUTPUT_ROOT"
+            '
