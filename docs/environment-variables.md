@@ -1,70 +1,94 @@
 # Container Environment Variables
 
-This document describes the environment variables used or exported by the base and workspace images.
+This document describes the runtime environment variables exported by Docker images.
 
-## Base Image
+Docker layout paths are fixed in code:
 
-### `GKI_WORKSPACE_ROOT`
+- work root: `/workspace`
+- AKB runtime root: `/workspace/.akb`
+- Docker metadata root: `/workspace/docker_metadata`
+- cache root: `/workspace/.cache`
+- default output root: `/workspace/out`
 
-- Default: `/workspace`
-- Used as the default working directory for the base image.
-- Also used when the base image preconfigures Git `safe.directory` entries.
+The entrypoint loads `/workspace/docker_metadata/gki-builder.env` before executing the requested command.
+
+## Runtime Variables
+
+### `GKI_TARGET_NAME`
+
+- Active target name from `/workspace/.akb/active-target.toml`.
+
+### `GKI_SOURCE_ROOT`
+
+- Synced kernel source root inside the container.
+- Usually `/workspace/android-kernel`.
+
+### `GKI_DOCKER_METADATA_ROOT`
+
+- Fixed metadata root for generated Docker metadata.
+- Default: `/workspace/docker_metadata`.
+
+### `GKI_TARGET_METADATA_ROOT`
+
+- Per-target metadata directory.
+- Default: `/workspace/docker_metadata/targets/${GKI_TARGET_NAME}`.
+
+## Build Metadata Variables
+
+These are exported so downstream CI scripts can inspect the active image target without parsing TOML.
+
+### `GKI_BUILD_SYSTEM`
+
+- Build system, for example `kleaf`.
+
+### `GKI_BUILD_ARCH`
+
+- Target architecture, for example `aarch64` or `x86_64`.
+
+### `GKI_BUILD_TARGET`
+
+- Main build target label or identifier.
+
+### `GKI_WARMUP_TARGET`
+
+- Warmup build target when configured.
+
+### `GKI_DIST_DIR`
+
+- Target-relative distribution output directory.
+
+### `GKI_DIST_FLAG`
+
+- Output flag used by the configured build flow.
+
+## Manifest Metadata Variables
+
+### `GKI_MANIFEST_SOURCE`
+
+- `remote` or `local`.
+
+### `GKI_MANIFEST_URL`
+
+- Manifest repository URL.
+
+### `GKI_MANIFEST_BRANCH`
+
+- Manifest branch used by `repo init`.
+
+### `GKI_MANIFEST_FILE`
+
+- Remote manifest file name when configured.
+
+### `GKI_MANIFEST_PATH`
+
+- Embedded local manifest path relative to `/workspace/.akb/manifests` when configured.
+
+## Other Common Image Variables
 
 ### `VIRTUAL_ENV`
 
 - Default: `/opt/venv`
-- Python virtual environment used by the image.
 
 ### `PATH`
 
-- Includes `${VIRTUAL_ENV}/bin` and `/root/.local/bin`
-- Makes the installed Python tooling and helper commands available by default.
-
-## Workspace Image
-
-The workspace image inherits `GKI_WORKSPACE_ROOT` from the base image and adds workspace-specific paths under that root.
-
-### `GKI_BUILDER_ROOT`
-
-- Default: `${GKI_WORKSPACE_ROOT}/.gki-builder/tooling`
-- Location of the checked-in builder repository copied into the image.
-
-### `GKI_CACHE_ROOT`
-
-- Default: `${GKI_WORKSPACE_ROOT}/.cache`
-- Reusable cache root used for repo reference data, Bazel cache, and ccache.
-
-### `GKI_TARGET_CONFIG`
-
-- Default: `${GKI_WORKSPACE_ROOT}/.gki-builder/image/target-config.toml`
-- Resolved target config copied into the workspace image during build.
-
-### `GKI_ENV_FILE`
-
-- Default: `${GKI_WORKSPACE_ROOT}/.gki-builder/image/gki-builder.env`
-- Shell fragment generated during workspace image build.
-- Loaded by `docker/entrypoint.sh` when the container starts.
-
-### `GKI_SOURCE_ROOT`
-
-- Generated into `GKI_ENV_FILE`
-- Points to the synced kernel source directory under `GKI_WORKSPACE_ROOT`.
-- Example: `${GKI_WORKSPACE_ROOT}/android-kernel`
-
-### `GKI_TARGET_NAME`
-
-- Generated into `GKI_ENV_FILE`
-- Mirrors the `name` field from the selected target config.
-
-### `GKI_SNAPSHOT_GIT_PROJECTS`
-
-- Used by snapshot images.
-- Comma-separated list of repo projects preserved as standalone Git repositories after snapshot pruning.
-- Default: `common`
-
-## Output Paths
-
-There is no default exported output-root environment variable.
-
-- Downstream callers should choose the build output path explicitly with `gki-builder build --output-root ...`
-- Snapshot images keep exported warmup artifacts under the output root used during image creation, usually `${GKI_WORKSPACE_ROOT}/out`
+- Includes `/opt/venv/bin` and `/usr/local/bin` so `gki-builder` and `repo` are available in login shells.

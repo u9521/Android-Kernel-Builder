@@ -4,7 +4,7 @@ name = "avd-android16-6.12-x64"
 source = "local"
 url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android16-6.12"
-path = "../../manifests/avd/avd-android-16.1-6.12_x64.xml"
+path = "manifests/avd/avd-android-16.1-6.12_x64.xml"
 minimal = true
 
 [build]
@@ -23,4 +23,3 @@ ccache_dir = "ccache"
 
 [workspace]
 source_dir = "android-kernel"
-metadata_dir = ".gki-builder"

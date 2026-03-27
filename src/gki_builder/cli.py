@@ -10,10 +10,12 @@ from pathlib import Path
 
 from .build import build_kernel, warmup_kernel
 from .docker import build_base_image, build_snapshot_image, build_workspace_image, run_container
+from . import layout
+from .config import load_akb_config
+from .environment import discover_current_environment
 from .snapshot import parse_snapshot_git_projects
-from .targets import load_target_config
-from .utils import ensure_directory
-from .workspace import prepare_workspace
+from .target_store import host_target_config_path, resolve_target
+from .workspace import sync_source
 
 
 DEFAULT_JOBS = os.cpu_count() or 1
@@ -23,34 +25,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Prepare reusable GKI workspaces and builds")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    show_target = subparsers.add_parser("show-target", help="Print a target config as JSON")
-    show_target.add_argument("--target-config", required=True, help="Path to target config")
+    show_target = subparsers.add_parser("show-target", help="Print the selected target config as JSON")
+    show_target.add_argument("--target", help="Target name; defaults to .akb/config.toml on host")
     show_target.set_defaults(handler=handle_show_target)
 
-    bootstrap = subparsers.add_parser("bootstrap", help="Create local workspace, cache, and output directories")
-    bootstrap.add_argument("--workspace", default=".workspace", help="Workspace root directory")
-    bootstrap.add_argument("--cache-root", default=".cache", help="Cache root directory")
-    bootstrap.add_argument("--output-root", default="out", help="Artifacts root directory")
-    bootstrap.set_defaults(handler=handle_bootstrap)
-
-    prepare = subparsers.add_parser("prepare-workspace", help="Initialize and sync kernel source")
-    _add_shared_target_arguments(prepare)
-    prepare.add_argument(
+    sync = subparsers.add_parser("sync-source", help="Initialize and sync kernel source")
+    _add_shared_target_arguments(sync)
+    sync.add_argument(
         "--jobs",
         type=int,
         default=DEFAULT_JOBS,
         help=f"repo sync parallelism (default: max available threads, {DEFAULT_JOBS})",
     )
-    prepare.set_defaults(handler=handle_prepare_workspace)
+    sync.set_defaults(handler=handle_sync_source)
 
     build = subparsers.add_parser("build", help="Build the configured kernel target")
     _add_shared_target_arguments(build)
-    build.add_argument("--output-root", default="out", help="Artifacts root directory")
+    build.add_argument("--output-root", help="Artifacts root directory; defaults to .akb/config.toml on host")
     build.set_defaults(handler=handle_build)
 
     warmup = subparsers.add_parser("warmup-build", help="Warm build caches for the configured target")
     _add_shared_target_arguments(warmup)
-    warmup.add_argument("--output-root", default="out", help="Artifacts root directory")
+    warmup.add_argument("--output-root", help="Artifacts root directory; defaults to .akb/config.toml on host")
     warmup.set_defaults(handler=handle_warmup_build)
 
     docker_base = subparsers.add_parser("docker-build-base", help="Build the base image")
@@ -61,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     docker_workspace = subparsers.add_parser("docker-build-workspace", help="Build the workspace image")
     docker_workspace.add_argument("--tag", required=True, help="Image tag")
     docker_workspace.add_argument("--base-image", required=True, help="Parent image tag")
-    docker_workspace.add_argument("--target-config", required=True, help="Path to target config")
+    docker_workspace.add_argument("--target", required=True, help="Target name")
     docker_workspace.add_argument(
         "--dockerfile",
         default="docker/workspace.Dockerfile",
@@ -72,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     docker_snapshot = subparsers.add_parser("docker-build-snapshot", help="Build the snapshot image")
     docker_snapshot.add_argument("--tag", required=True, help="Image tag")
     docker_snapshot.add_argument("--base-image", required=True, help="Parent image tag")
-    docker_snapshot.add_argument("--target-config", required=True, help="Path to target config")
+    docker_snapshot.add_argument("--target", required=True, help="Target name")
     docker_snapshot.add_argument(
         "--dockerfile",
         default="docker/snapshot.Dockerfile",
@@ -87,8 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     docker_run = subparsers.add_parser("docker-run", help="Run an existing image with mounted workspace")
     docker_run.add_argument("--image", required=True, help="Image tag")
-    docker_run.add_argument("--workspace", default=".workspace", help="Workspace root directory")
-    docker_run.add_argument("--cache-root", default=".cache", help="Cache root directory")
+    docker_run.add_argument("--workspace", default="work", help="Workspace root directory")
+    docker_run.add_argument("--cache-root", help="Cache root directory; defaults to <workspace>/.cache")
     docker_run.add_argument("--output-root", default="out", help="Artifacts root directory")
     docker_run.add_argument("container_command", nargs=argparse.REMAINDER, help="Command passed to container")
     docker_run.set_defaults(handler=handle_docker_run)
@@ -97,13 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_shared_target_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--target-config", required=True, help="Path to target config")
-    parser.add_argument("--workspace", default=".workspace", help="Workspace root directory")
-    parser.add_argument("--cache-root", default=".cache", help="Cache root directory")
+    parser.add_argument("--target", help="Target name; defaults to .akb/config.toml on host")
+    parser.add_argument("--cache-root", help="Cache root directory; defaults to .akb/config.toml on host")
 
 
 def handle_show_target(args: argparse.Namespace) -> int:
-    target = load_target_config(args.target_config)
+    target = resolve_target(discover_current_environment(), args.target)
+    metadata_root = _target_metadata_root_preview(target)
     payload = {
         "name": target.name,
         "manifest": {
@@ -134,6 +130,7 @@ def handle_show_target(args: argparse.Namespace) -> int:
         "workspace": {
             "source_dir": target.workspace.source_dir,
             "metadata_dir": target.workspace.metadata_dir,
+            "metadata_root": str(metadata_root),
         },
         "config_path": str(target.config_path),
     }
@@ -141,42 +138,42 @@ def handle_show_target(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_bootstrap(args: argparse.Namespace) -> int:
-    workspace_root = ensure_directory(Path(args.workspace))
-    cache_root = ensure_directory(Path(args.cache_root))
-    ensure_directory(cache_root / "repo")
-    ensure_directory(cache_root / "bazel")
-    ensure_directory(cache_root / "ccache")
-    output_root = ensure_directory(Path(args.output_root))
-    print(
-        json.dumps(
-            {
-                "workspace": str(workspace_root.resolve()),
-                "cache_root": str(cache_root.resolve()),
-                "output_root": str(output_root.resolve()),
-            },
-            indent=2,
-            sort_keys=True,
-        )
+def handle_sync_source(args: argparse.Namespace) -> int:
+    environment = discover_current_environment()
+    akb_config = load_akb_config(environment.work_root) if environment.mode == "host" else None
+    target = resolve_target(environment, args.target)
+    sync_source(
+        target,
+        environment.work_root,
+        _resolve_cache_root(args.cache_root, environment.work_root, akb_config),
+        args.jobs,
     )
     return 0
 
 
-def handle_prepare_workspace(args: argparse.Namespace) -> int:
-    target = load_target_config(args.target_config)
-    prepare_workspace(target, Path(args.workspace), Path(args.cache_root), args.jobs)
-    return 0
-
-
 def handle_build(args: argparse.Namespace) -> int:
-    target = load_target_config(args.target_config)
-    build_kernel(target, Path(args.workspace), Path(args.cache_root), Path(args.output_root))
+    environment = discover_current_environment()
+    akb_config = load_akb_config(environment.work_root) if environment.mode == "host" else None
+    target = resolve_target(environment, args.target)
+    build_kernel(
+        target,
+        environment.work_root,
+        _resolve_cache_root(args.cache_root, environment.work_root, akb_config),
+        _resolve_output_root(args.output_root, environment.work_root, akb_config),
+    )
     return 0
 
 
 def handle_warmup_build(args: argparse.Namespace) -> int:
-    target = load_target_config(args.target_config)
-    warmup_kernel(target, Path(args.workspace), Path(args.cache_root), Path(args.output_root))
+    environment = discover_current_environment()
+    akb_config = load_akb_config(environment.work_root) if environment.mode == "host" else None
+    target = resolve_target(environment, args.target)
+    warmup_kernel(
+        target,
+        environment.work_root,
+        _resolve_cache_root(args.cache_root, environment.work_root, akb_config),
+        _resolve_output_root(args.output_root, environment.work_root, akb_config),
+    )
     return 0
 
 
@@ -188,10 +185,13 @@ def handle_docker_build_base(args: argparse.Namespace) -> int:
 
 def handle_docker_build_workspace(args: argparse.Namespace) -> int:
     repo_root = Path(__file__).resolve().parents[2]
+    environment = discover_current_environment()
+    if environment.mode != "host":
+        raise ValueError("docker-build-workspace must be run from a host AKB environment")
     build_workspace_image(
         args.tag,
         args.base_image,
-        Path(args.target_config),
+        host_target_config_path(environment.work_root, args.target),
         repo_root,
         repo_root / args.dockerfile,
     )
@@ -200,10 +200,13 @@ def handle_docker_build_workspace(args: argparse.Namespace) -> int:
 
 def handle_docker_build_snapshot(args: argparse.Namespace) -> int:
     repo_root = Path(__file__).resolve().parents[2]
+    environment = discover_current_environment()
+    if environment.mode != "host":
+        raise ValueError("docker-build-snapshot must be run from a host AKB environment")
     build_snapshot_image(
         args.tag,
         args.base_image,
-        Path(args.target_config),
+        host_target_config_path(environment.work_root, args.target),
         repo_root,
         repo_root / args.dockerfile,
         parse_snapshot_git_projects(args.snapshot_git_projects),
@@ -218,11 +221,50 @@ def handle_docker_run(args: argparse.Namespace) -> int:
     run_container(
         args.image,
         Path(args.workspace),
-        Path(args.cache_root),
+        _resolve_cache_root(args.cache_root, args.workspace),
         Path(args.output_root),
         command or ["bash"],
     )
     return 0
+
+
+def _resolve_cache_root(cache_root: str | None, work_root: str | Path, akb_config: object | None = None) -> Path:
+    if cache_root:
+        return Path(cache_root)
+    if akb_config is not None:
+        from .config import AkbConfig
+
+        assert isinstance(akb_config, AkbConfig)
+        return _resolve_under_work_root(work_root, akb_config.workspace.cache_dir)
+    return layout.cache_root(Path(work_root))
+
+
+def _resolve_output_root(output_root: str | None, work_root: str | Path, akb_config: object | None = None) -> Path:
+    if output_root:
+        return Path(output_root)
+    if akb_config is not None:
+        from .config import AkbConfig
+
+        assert isinstance(akb_config, AkbConfig)
+        return _resolve_under_work_root(work_root, akb_config.workspace.output_dir)
+    return layout.output_root(Path(work_root))
+
+
+def _resolve_under_work_root(work_root: str | Path, value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return Path(work_root) / path
+
+
+def _target_metadata_root_preview(target: object) -> Path:
+    from .targets import TargetConfig
+
+    assert isinstance(target, TargetConfig)
+    metadata_dir = target.workspace.metadata_dir
+    if metadata_dir == layout.docker_target_metadata_relative_dir():
+        return layout.docker_target_metadata_root(layout.DOCKER_WORK_ROOT, target.name)
+    return layout.host_target_metadata_root(Path("<work>"), target.name)
 
 
 def main() -> int:

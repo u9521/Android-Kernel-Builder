@@ -4,7 +4,7 @@ name = "avd-android15-6.6-arm64"
 source = "local"
 url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android15-6.6"
-path = "../../manifests/avd/avd-android-15-6.6_arm64.xml"
+path = "manifests/avd/avd-android-15-6.6_arm64.xml"
 minimal = true
 
 [build]
@@ -23,4 +23,3 @@ ccache_dir = "ccache"
 
 [workspace]
 source_dir = "android-kernel"
-metadata_dir = ".gki-builder"

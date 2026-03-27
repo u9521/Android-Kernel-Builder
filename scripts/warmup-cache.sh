@@ -6,15 +6,13 @@ set -euo pipefail
 
 export PYTHONPATH="$(pwd)/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-TARGET_CONFIG=${1:-configs/targets/android15-6.6.toml}
+TARGET=${1:-android15-6.6}
 
-python3 -m gki_builder.cli prepare-workspace \
-  --target-config "$TARGET_CONFIG" \
-  --workspace .workspace \
+python3 -m gki_builder.cli sync-source \
+  --target "$TARGET" \
   --cache-root .cache
 
 python3 -m gki_builder.cli build \
-  --target-config "$TARGET_CONFIG" \
-  --workspace .workspace \
+  --target "$TARGET" \
   --cache-root .cache \
   --output-root out

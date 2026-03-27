@@ -37,9 +37,5 @@ jobs:
             bash -lc '
               cd "$GKI_SOURCE_ROOT" &&
               git apply "$DOWNSTREAM_ROOT/patches/my-change.patch" &&
-              gki-builder build \
-                --target-config "$GKI_TARGET_CONFIG" \
-                --workspace "$GKI_WORKSPACE_ROOT" \
-                --cache-root "$GKI_CACHE_ROOT" \
-                --output-root /workspace/out
+              gki-builder build --output-root /workspace/out
             '

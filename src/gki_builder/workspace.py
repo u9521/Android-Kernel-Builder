@@ -5,11 +5,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import layout
 from .targets import TargetConfig
 from .utils import current_environment, ensure_directory, run_command, sha256_file, write_json
 
 
-def prepare_workspace(
+def sync_source(
     target: TargetConfig,
     workspace_root: Path,
     cache_root: Path,
@@ -18,7 +19,7 @@ def prepare_workspace(
     workspace_root = workspace_root.resolve()
     cache_root = cache_root.resolve()
     source_dir = ensure_directory(workspace_root / target.workspace.source_dir)
-    metadata_dir = ensure_directory(workspace_root / target.workspace.metadata_dir / target.name)
+    metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
     repo_reference_dir = ensure_directory(cache_root / target.cache.repo_dir)
     ensure_directory(cache_root / target.cache.bazel_dir)
     ensure_directory(cache_root / target.cache.ccache_dir)
@@ -55,6 +56,13 @@ def build_environment(target: TargetConfig, cache_root: Path) -> dict[str, str]:
         "USE_CCACHE": "1",
         "CCACHE_DIR": str((cache_root / target.cache.ccache_dir).resolve()),
     })
+
+
+def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path:
+    metadata_dir = target.workspace.metadata_dir
+    if metadata_dir == layout.docker_target_metadata_relative_dir():
+        return layout.docker_target_metadata_root(workspace_root, target.name)
+    return layout.host_target_metadata_root(workspace_root, target.name)
 
 
 def _repo_init(target: TargetConfig, source_dir: Path, repo_reference_dir: Path) -> None:

@@ -44,7 +44,7 @@ When a target contains:
 source = "local"
 url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android15-6.6"
-path = "../../manifests/avd/local_manifests/avd-android-15-6.6_arm64.xml"
+path = "avd/avd-android-15-6.6_arm64.xml"
 minimal = true
 ```
 
@@ -56,6 +56,9 @@ repo sync --trace -c --no-clone-bundle --no-tags ...
 ```
 
 This matches the old CI style more closely: the checked-in local XML is passed directly to `repo init -m` and acts as the active manifest entry.
+
+In host mode, local manifest paths are resolved under `{work}/.akb/targets/manifests`.
+In Docker runtime mode, embedded local manifest paths are resolved under `/workspace/.akb/manifests`.
 
 ## Which One Should I Use?
 
@@ -76,4 +79,5 @@ This matches the old CI style more closely: the checked-in local XML is passed d
 - `autodetect_deprecated = true` is optional. Enable it for older remote branches that may have been moved under `deprecated/` upstream.
 - There is no repo version pin in the current implementation.
 - For local mode, `url` is still required because `repo init` needs a manifest repository context even when `-m` points at a checked-in local XML.
+- Embedded Docker manifests must remain inside the embedded manifests root; escape paths and absolute paths are rejected.
 - Deprecated-branch auto-detection currently applies only to `remote` manifests whose branch looks like `common-<kernel-branch>`.

@@ -6,4 +6,4 @@ set -euo pipefail
 
 export PYTHONPATH="$(pwd)/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-python3 -m gki_builder.cli prepare-workspace "$@"
+python3 -m gki_builder.cli sync-source "$@"

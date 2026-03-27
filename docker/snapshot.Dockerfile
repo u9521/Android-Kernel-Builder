@@ -2,36 +2,39 @@
 # Copyright (C) 2026 u9521
 
 ARG BASE_IMAGE=ghcr.io/example/gki-base:latest
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS builder
 
-ARG TARGET_CONFIG=configs/targets/android15-6.6.toml
+ARG SOURCE_TARGET_FILE=configs/targets/android15-6.6.toml
 ARG SNAPSHOT_GIT_PROJECTS=common
 
-ENV GKI_BUILDER_ROOT=${GKI_WORKSPACE_ROOT}/.gki-builder/tooling \
-    GKI_CACHE_ROOT=${GKI_WORKSPACE_ROOT}/.cache \
-    GKI_TARGET_CONFIG=${GKI_WORKSPACE_ROOT}/.gki-builder/image/target-config.toml \
-    GKI_ENV_FILE=${GKI_WORKSPACE_ROOT}/.gki-builder/image/gki-builder.env \
-    GKI_SNAPSHOT_GIT_PROJECTS=${SNAPSHOT_GIT_PROJECTS}
+WORKDIR /tmp/akb-build
 
-WORKDIR ${GKI_BUILDER_ROOT}
+COPY . .
 
-COPY . ${GKI_BUILDER_ROOT}
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /tmp/gki-wheels .
+RUN PYTHONPATH=/tmp/akb-build/src python3 -m gki_builder.image_env \
+        --source-target-file ${SOURCE_TARGET_FILE} \
+        --workspace-root /workspace \
+        --output-root /tmp/gki-runtime/workspace
+RUN install -Dm755 "docker/entrypoint.sh" /tmp/gki-runtime/bin/gki-workspace-entrypoint
 
-RUN pip install --no-cache-dir . \
-    && install -Dm755 /opt/venv/bin/gki-builder /usr/local/bin/gki-builder
-RUN TARGET_CONFIG_PATH="${TARGET_CONFIG}" python3 -m gki_builder.image_env
-RUN install -Dm755 "${GKI_BUILDER_ROOT}/docker/entrypoint.sh" /usr/local/bin/gki-workspace-entrypoint
-RUN mkdir -p "${GKI_CACHE_ROOT}" "${GKI_WORKSPACE_ROOT}/out" \
-    && gki-builder prepare-workspace \
-        --target-config ${TARGET_CONFIG} \
-        --workspace ${GKI_WORKSPACE_ROOT} \
-        --cache-root ${GKI_CACHE_ROOT} \
-    && gki-builder warmup-build \
-        --target-config ${TARGET_CONFIG} \
-        --workspace ${GKI_WORKSPACE_ROOT} \
-        --cache-root ${GKI_CACHE_ROOT} \
-        --output-root ${GKI_WORKSPACE_ROOT}/out \
-    && python3 -m gki_builder.snapshot
+FROM ${BASE_IMAGE}
 
-WORKDIR ${GKI_WORKSPACE_ROOT}
+ARG SNAPSHOT_GIT_PROJECTS=common
+
+COPY --from=builder /tmp/gki-wheels /tmp/gki-wheels
+RUN pip install --no-cache-dir /tmp/gki-wheels/*.whl \
+    && install -Dm755 /opt/venv/bin/gki-builder /usr/local/bin/gki-builder \
+    && rm -rf /tmp/gki-wheels
+COPY --from=builder /tmp/gki-runtime/workspace/.akb /workspace/.akb
+COPY --from=builder /tmp/gki-runtime/workspace/docker_metadata /workspace/docker_metadata
+COPY --from=builder /tmp/gki-runtime/bin/gki-workspace-entrypoint /usr/local/bin/gki-workspace-entrypoint
+
+RUN gki-builder sync-source \
+    && gki-builder warmup-build --output-root /workspace/out \
+    && python3 -m gki_builder.snapshot \
+        --workspace-root /workspace \
+        --snapshot-git-projects ${SNAPSHOT_GIT_PROJECTS}
+
+WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/gki-workspace-entrypoint"]

@@ -25,4 +25,3 @@ ccache_dir = "ccache"
 
 [workspace]
 source_dir = "android-kernel"
-metadata_dir = ".gki-builder"

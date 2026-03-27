@@ -1,115 +1,134 @@
 # GKI Builder
 
-This repository prepares reusable Android GKI workspaces for local builds and CI.
+This repository prepares reusable Android GKI build environments for host workflows and CI-focused Docker images.
 
-The main idea is:
+Current direction:
 
-1. Build a stable `gki-base` image with toolchains and build dependencies.
-2. Build a `gki-workspace` image with synced kernel source plus warmed `repo`, `bazel`, and `ccache` state.
-3. Let consumer repositories pull the workspace image, patch the source tree, and run an incremental Kleaf build.
+- host mode uses a fixed AKB work-tree layout rooted at `{work}/.akb`
+- docker mode uses a fixed runtime layout rooted at `/workspace`
+- Docker images are one-image-one-target and embed a single active target config
 
-## Layout
+## Repository Layout
 
-- `configs/targets/*.toml`: target definitions for GKI and AVD variants.
-- `docker/`: base and workspace image definitions.
-- `docs/`: configuration reference and manifest mode notes.
-- `manifests/`: checked-in manifest snapshots.
-- `src/gki_builder/`: CLI and orchestration code.
-- `scripts/`: thin wrappers for common local workflows.
-- `examples/consumer-github-actions.yml`: sample consumer CI job.
+- `configs/global.toml`: repository-wide snapshot-image defaults
+- `configs/targets/*.toml`: checked-in source target definitions used when building Docker images from the repo
+- `docker/`: image definitions
+- `docs/`: reference docs
+- `manifests/`: checked-in source manifests
+- `src/gki_builder/`: CLI and orchestration code
+- `examples/consumer-github-actions.yml`: sample downstream CI usage
 
-## Target Model
+## Host Layout
 
-Each target config describes three things:
+Host mode is converging on this fixed layout:
 
-- where the manifest comes from
-- how the kernel is built
-- where source and caches live inside the reusable workspace
-
-Example remote manifest target:
-
-```toml
-name = "android15-6.6"
-
-[manifest]
-source = "remote"
-url = "https://android.googlesource.com/kernel/manifest"
-branch = "common-android15-6.6"
-file = "default.xml"
-
-[build]
-system = "kleaf"
-target = "//common:kernel_{arch}_dist"
-arch = "aarch64"
+```text
+{work}/
+├── .akb/
+│   ├── config.toml
+│   ├── targets/
+│   │   ├── configs/
+│   │   └── manifests/
+│   └── venv/ or bin/
+├── targets -> .akb/targets
+├── .cache/
+└── out/
 ```
 
-Example local manifest target:
+Commands assume the current directory is inside an initialized AKB work tree.
 
-```toml
-name = "avd-android15"
-
-[manifest]
-source = "local"
-path = "../../manifests/avd/avd-android-15-6.6_arm64.xml"
-url = "https://android.googlesource.com/kernel/manifest"
-branch = "common-android15-6.6"
-minimal = true
-```
-
-`source = "local"` means the checked-in XML is passed directly to `repo init -m`, which matches the old CI style more closely.
-
-For remote targets that use `common-*` branches, workspace preparation also auto-detects
-deprecated `kernel/common` branch names and rewrites the initialized manifest before sync when needed, but only when `autodetect_deprecated = true` is set for that target.
-
-Kleaf builds in this repository rely on the kernel source tree's `tools/bazel`; the Docker images do not install a separate system `bazel` or `bazelisk` fallback.
-
-Build targets must declare `build.system` explicitly as either `kleaf` or `legacy`
-
-You can set `build.jobs` in a target file to control compile parallelism. If omitted, builds use the maximum available CPU threads.
-
-When tuning `build.lto`, remember that LTO defaults are branch-specific. The Kleaf LTO guide notes that GKI `gki_defconfig` on `android14-6.1` and newer disables LTO by default. For development and iterative patching, `lto = "none"` is often the safer and faster choice, and it may also avoid incremental cache issues described in the upstream guide: `https://android.googlesource.com/kernel/build/+/refs/heads/master/kleaf/docs/lto.md`
-
-## Local Usage
-
-Install the package:
+Initialize one from a Linux host directory:
 
 ```bash
-python3 -m pip install -e .
+curl -fsSL https://raw.githubusercontent.com/u9521/Android-Kernel-Builder/refs/heads/master/install.sh | bash
 ```
 
-Create local directories:
+When run from this repository checkout, `install.sh` seeds `.akb/targets/configs` and `.akb/targets/manifests` from the checked-in `configs/targets` and `manifests` trees, creates `targets -> .akb/targets`, writes `.akb/config.toml`, and creates `.akb/bin`.
+
+## Host Install
+
+Run the installer from the directory you want to use as the AKB work root:
 
 ```bash
-gki-builder bootstrap \
-  --workspace .workspace \
-  --cache-root .cache \
-  --output-root out
+mkdir work
+cd work
+bash /path/to/Android-Kernel-Builder/install.sh
 ```
 
-Prepare the source workspace:
+The script currently:
+
+- supports Linux hosts only
+- requires `python3`
+- creates `.akb/config.toml`, `.akb/targets/configs`, `.akb/targets/manifests`, `.akb/bin`, `.cache`, and `out`
+- creates `targets -> .akb/targets`
+- appends `.akb/bin/` and `.akb/venv/` to `.gitignore`
+- does not overwrite an existing `.akb/config.toml` or existing seeded target files
+
+If the installer can see this repository checkout, it also copies the checked-in host seed data:
+
+- `configs/targets/*.toml` -> `.akb/targets/configs/*.toml`
+- `manifests/**` -> `.akb/targets/manifests/**`
+
+Supported installer environment variables:
+
+- `AKB_DEFAULT_TARGET`: overrides the generated `.akb/config.toml` `default_target`
+- `AKB_SOURCE_DIR`: overrides the generated host source directory name; default `android-kernel`
+- `AKB_CACHE_DIR`: overrides the generated host cache directory name; default `.cache`
+- `AKB_OUTPUT_DIR`: overrides the generated host output directory name; default `out`
+
+Example:
 
 ```bash
-gki-builder prepare-workspace \
-  --target-config configs/targets/android15-6.6.toml \
-  --workspace .workspace \
-  --cache-root .cache
+AKB_DEFAULT_TARGET=avd-android15-6.6-x64 \
+AKB_SOURCE_DIR=src/android-kernel \
+bash /path/to/Android-Kernel-Builder/install.sh
 ```
 
-`prepare-workspace` defaults to the maximum available CPU threads. Use `--jobs` only when you want to cap sync parallelism manually.
-
-Warm the cache with one build:
+After install, the normal host flow is:
 
 ```bash
-gki-builder build \
-  --target-config configs/targets/android15-6.6.toml \
-  --workspace .workspace \
-  --cache-root .cache \
-  --output-root out
+gki-builder show-target
+gki-builder sync-source
+gki-builder build
 ```
 
-After each build, the CLI prints a disk usage report and writes `.gki-builder/<target>/disk-usage.json` inside the workspace root. The report breaks down source checkout size, `.repo` metadata, cache usage, build outputs, and workspace metadata.
+## Docker Layout
 
-## Docker Usage
+Docker runtime uses fixed paths:
+
+```text
+/workspace/
+├── .akb/
+│   ├── active-target.toml
+│   └── manifests/
+├── docker_metadata/
+│   └── gki-builder.env
+├── .cache/
+├── out/
+└── android-kernel/
+```
+
+The final image keeps only the minimal runtime payload needed for CI use. It does not keep a full AKB repository checkout.
+
+## Commands
+
+Show the resolved target:
+
+```bash
+gki-builder show-target --target android15-6.6
+```
+
+Sync source for a host target:
+
+```bash
+gki-builder sync-source --target android15-6.6
+```
+
+Build a host target:
+
+```bash
+gki-builder build --target android15-6.6 --output-root out
+```
 
 Build the base image:
 
@@ -117,92 +136,56 @@ Build the base image:
 gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 ```
 
-The base image is labeled as a minimal environment for building GKI kernels. It also preconfigures Git `safe.directory` entries for `GKI_WORKSPACE_ROOT` and `GKI_WORKSPACE_ROOT/*` so repositories created or mounted under the workspace root are less likely to fail with `dubious ownership` errors.
-
-Build the workspace image:
+Build a one-image-one-target workspace image:
 
 ```bash
 gki-builder docker-build-workspace \
   --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
   --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target-config configs/targets/android15-6.6.toml
+  --target android15-6.6
 ```
 
-Build the snapshot image when downstream consumers only need kernel source and kernel-only warmup outputs:
+Build a one-image-one-target snapshot image:
 
 ```bash
 gki-builder docker-build-snapshot \
   --tag ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
   --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target-config configs/targets/android15-6.6.toml
+  --target android15-6.6 \
+  --snapshot-git-projects common
 ```
 
-During workspace image build, the Dockerfile now runs `prepare-workspace` and one `gki-builder warmup-build` pass so the published image already contains prepared source plus warmed compile caches.
-
-The warmup build mainly helps Bazel and ccache reuse previous work. If a consumer repository only changes a small patch set, especially in a limited part of the kernel tree, more cached actions can be reused and rebuilds are usually much faster. Large patch sets, broad config changes, toolchain changes, or target changes will reduce cache hit rates and the speedup will be smaller.
-
-If `build.warmup_target` is set in a target config, workspace image warmup uses that Bazel target with `bazel build` instead of the normal distribution-producing build target. This is useful when you want image creation to compile the kernel and populate caches without also creating ramdisk or partition images.
-
-The bundled AVD target configs use `//common-modules/virtual-device:virtual_device_{arch}` as their warmup target so prewarming focuses on kernel and module compilation instead of `initramfs` and dist packaging.
-
-`gki-builder warmup-build` also exports the warmup target's default output files under `<output-root>/<dist_dir>` and records them in `.gki-builder/<target>/warmup-outputs.json`, so downstream kernel-only users can consume those artifacts directly.
-
-The `build-workspace-image` GitHub Actions workflow expects only the target name, for example `android15-6.6`, and resolves it from `configs/targets/<name>.toml` automatically. It publishes both `gki-workspace` and `gki-snapshot` images in one run, reusing the same runner-local BuildKit cache so the second build can avoid redoing most of the shared work without uploading huge cache layers to GitHub Actions cache storage.
-
-Both workspace and snapshot images install `gki-builder` into `/usr/local/bin` so downstream `bash -lc` workflows can still invoke the CLI even if a login shell resets `PATH`.
-
-For workspace-image environment variables and common in-image files, see `docs/environment-variables.md` and `docs/image-files.md`. Build output paths are left to downstream callers to choose explicitly.
-
-Snapshot images keep the warmed source tree, exported warmup artifacts, and cache directories needed for downstream kernel-only work, but drop `.repo` metadata. By default they preserve `common` as a standalone Git repository so downstream patching can still commit under `$GKI_SOURCE_ROOT/common` without leaving the kernel tree dirty.
-
-Because snapshot images remove `.repo`, downstream workflows should rely on Git operations in the preserved project directories instead of `repo status` or other repo-wide commands.
-
-Run a command inside the workspace image:
+Run a built image:
 
 ```bash
 gki-builder docker-run \
   --image ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  --workspace .workspace \
-  --cache-root .cache \
+  --workspace work \
   --output-root out \
   -- bash -lc 'cd "$GKI_SOURCE_ROOT" && tools/bazel help'
 ```
 
-## Publishing Strategy
+## Docker Behavior
 
-Recommended image split:
-
-- `ghcr.io/<owner>/gki-base:<toolchain-tag>`
-- `ghcr.io/<owner>/gki-workspace:<target>-<manifest-or-date-tag>`
-
-Keep tags stable enough that consumers can intentionally pin to a source baseline.
-
-When a workspace image is produced, the CLI also writes target metadata under `.gki-builder/<target>/workspace.json` and disk usage details under `.gki-builder/<target>/disk-usage.json` inside the workspace root. That makes it easier to inspect which manifest and cache layout the image was built from.
-
-Because workspace images now perform one warmup build during image creation, expect workspace image builds to take longer than base image builds.
-
-## Consumer CI Flow
-
-1. pull the pre-warmed workspace image
-2. mount downstream patch sources under a subdirectory of `$GKI_WORKSPACE_ROOT` and apply them inside `$GKI_SOURCE_ROOT`
-3. run `gki-builder build` against the mounted workspace
-4. collect artifacts from the output root you passed to `gki-builder build`
-
-See `examples/consumer-github-actions.yml` for a minimal pattern.
+- Docker runtime paths are fixed in code; they are no longer configured by Docker path env vars.
+- The entrypoint loads `/workspace/docker_metadata/gki-builder.env`.
+- That env file exports target, build, and manifest metadata for downstream CI scripts.
+- Workspace images run `gki-builder sync-source` and `gki-builder warmup-build` during image build.
+- Snapshot images additionally prune `.repo` while preserving selected Git projects.
 
 ## Notes
 
-- This project intentionally focuses on stock kernel source preparation and build reuse.
-- Project-specific patching belongs in consumer repositories, not in the workspace image; the example workflow mounts that repository under `$GKI_WORKSPACE_ROOT/downstream`.
-- Local manifests are first-class inputs so AVD or custom branch setups can be checked into the repo instead of discovered dynamically.
+- Kleaf builds rely on the kernel tree's `tools/bazel`.
+- Docker images are intended for CI/runtime use, not as full AKB development checkouts.
+- Local manifest support remains first-class, but embedded Docker manifests must stay inside the image manifest root.
 
 ## Documentation
 
-- `docs/configuration.md`: field-by-field target config reference
-- `docs/environment-variables.md`: environment variables used and exported by the container images
-- `docs/gki-builder-cli.md`: command reference for the `gki-builder` tool
-- `docs/image-files.md`: common files and paths inside the container images
-- `docs/manifest-modes.md`: remote and local init-manifest behavior
+- `docs/configuration.md`
+- `docs/environment-variables.md`
+- `docs/gki-builder-cli.md`
+- `docs/image-files.md`
+- `docs/manifest-modes.md`
 
 ## License
 

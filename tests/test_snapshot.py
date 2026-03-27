@@ -8,9 +8,12 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src").resolve()))
 
+environment_module = importlib.import_module("gki_builder.environment")
+layout = importlib.import_module("gki_builder.layout")
 snapshot = importlib.import_module("gki_builder.snapshot")
 
 
@@ -20,7 +23,7 @@ class SnapshotTests(unittest.TestCase):
             temp_root = Path(temp_dir)
             workspace_root = temp_root / "workspace"
             source_dir = workspace_root / "android-kernel"
-            metadata_dir = workspace_root / ".gki-builder" / "sample"
+            metadata_dir = workspace_root / ".akb" / "state" / "targets" / "sample"
             common_dir = source_dir / "common"
             tools_dir = source_dir / "tools"
             common_dir.mkdir(parents=True, exist_ok=True)
@@ -48,6 +51,59 @@ class SnapshotTests(unittest.TestCase):
     def test_parse_snapshot_git_projects_uses_default(self) -> None:
         self.assertEqual(snapshot.parse_snapshot_git_projects(None), ["common"])
         self.assertEqual(snapshot.parse_snapshot_git_projects("common,build/kernel"), ["common", "build/kernel"])
+
+    def test_create_workspace_snapshot_for_current_environment_uses_docker_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            workspace_root = temp_root / "workspace"
+            source_dir = workspace_root / "android-kernel"
+            metadata_dir = workspace_root / "docker_metadata" / "targets" / "sample"
+            common_dir = source_dir / "common"
+            tools_dir = source_dir / "tools"
+            common_dir.mkdir(parents=True, exist_ok=True)
+            tools_dir.mkdir(parents=True, exist_ok=True)
+            (tools_dir / "BUILD.bazel").write_text("exports_files([])\n", encoding="utf-8")
+            (source_dir / ".repo" / "manifests").mkdir(parents=True, exist_ok=True)
+            (temp_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            layout.active_target_file(workspace_root).parent.mkdir(parents=True, exist_ok=True)
+            layout.active_target_file(workspace_root).write_text(
+                """
+version = 1
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+
+[workspace]
+source_dir = "android-kernel"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            self._init_git_repo(common_dir, "README.md", "common")
+            self._convert_to_gitfile(common_dir, temp_root / "gitdirs" / "common.git")
+            self._init_git_repo(tools_dir, "BUILD.bazel", "tools")
+            self._convert_to_gitfile(tools_dir, temp_root / "gitdirs" / "tools.git")
+
+            with mock.patch.object(
+                snapshot,
+                "discover_current_environment",
+                return_value=environment_module.AkbEnvironment(mode="docker", work_root=workspace_root),
+            ):
+                result = snapshot.create_workspace_snapshot_for_current_environment(
+                    workspace_root=workspace_root,
+                    start_dir=temp_root,
+                )
+
+            self.assertEqual(result["preserved_git_projects"], ["common"])
+            self.assertTrue((metadata_dir / "snapshot.json").exists())
 
     def _init_git_repo(self, path: Path, file_name: str, content: str) -> None:
         path.mkdir(parents=True, exist_ok=True)

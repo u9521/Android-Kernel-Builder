@@ -44,6 +44,7 @@ def format_bytes(size: int) -> str:
                 return f"{int(value)} {unit}"
             return f"{value:.1f} {unit}"
         value /= 1024
+    return f"{value:.1f} {units[-1]}"
 
 
 def resolve_path(base_dir: Path, value: str | None) -> Path | None:
@@ -53,6 +54,14 @@ def resolve_path(base_dir: Path, value: str | None) -> Path | None:
     if path.is_absolute():
         return path
     return (base_dir / path).resolve()
+
+
+def discover_project_root(start_dir: Path) -> Path:
+    current = start_dir.resolve()
+    for candidate in [current, *current.parents]:
+        if (candidate / "pyproject.toml").exists():
+            return candidate
+    return current
 
 
 def sha256_file(path: Path) -> str:

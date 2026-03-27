@@ -9,7 +9,8 @@ import os
 from pathlib import Path
 import tomllib
 
-from .utils import resolve_path
+from . import layout
+from .utils import discover_project_root, resolve_path
 
 ARCHITECTURES = ("aarch64", "x86_64")
 MANIFEST_SOURCES = ("remote", "local")
@@ -50,7 +51,7 @@ class CacheConfig:
 @dataclass(slots=True)
 class WorkspaceConfig:
     source_dir: str = "android-kernel"
-    metadata_dir: str = ".gki-builder"
+    metadata_dir: str = layout.host_target_metadata_relative_dir()
 
 
 @dataclass(slots=True)
@@ -63,13 +64,18 @@ class TargetConfig:
     config_path: Path
 
 
-def load_target_config(config_path: str | Path) -> TargetConfig:
+def _parse_target_definition_file(
+    config_path: str | Path,
+    *,
+    manifest_root: Path | None = None,
+    default_source_dir: str = "android-kernel",
+) -> TargetConfig:
     path = Path(config_path).resolve()
     payload = load_mapping(path)
     if not isinstance(payload, dict):
         raise ValueError(f"Target config must be a mapping: {path}")
 
-    base_dir = path.parent
+    project_root = discover_project_root(path.parent)
     name = payload.get("name")
     if not name:
         raise ValueError(f"Missing required 'name' in {path}")
@@ -80,7 +86,12 @@ def load_target_config(config_path: str | Path) -> TargetConfig:
         url=manifest_payload.get("url"),
         branch=manifest_payload.get("branch"),
         file=manifest_payload.get("file"),
-        path=resolve_path(base_dir, manifest_payload.get("path")),
+        path=_resolve_manifest_path(
+            manifest_payload.get("path"),
+            manifest_root=manifest_root,
+            fallback_root=project_root,
+            config_path=path,
+        ),
         minimal=bool(manifest_payload.get("minimal", False)),
         autodetect_deprecated=bool(manifest_payload.get("autodetect_deprecated", False)),
     )
@@ -110,9 +121,10 @@ def load_target_config(config_path: str | Path) -> TargetConfig:
     )
 
     workspace_payload = payload.get("workspace") or {}
+    if "metadata_dir" in workspace_payload:
+        raise ValueError(f"workspace.metadata_dir is fixed by layout constants and cannot be configured in {path}")
     workspace = WorkspaceConfig(
-        source_dir=workspace_payload.get("source_dir", "android-kernel"),
-        metadata_dir=workspace_payload.get("metadata_dir", ".gki-builder"),
+        source_dir=workspace_payload.get("source_dir", default_source_dir),
     )
 
     return TargetConfig(
@@ -165,3 +177,22 @@ def validate_build(build: BuildConfig, config_path: Path) -> None:
         raise ValueError(f"build.warmup_target is only supported for kleaf builds in {config_path}")
     if build.dist_flag not in {"dist_dir", "destdir"}:
         raise ValueError(f"Unsupported dist_flag in {config_path}: {build.dist_flag}")
+
+
+def _resolve_manifest_path(
+    value: object,
+    *,
+    manifest_root: Path | None,
+    fallback_root: Path,
+    config_path: Path,
+) -> Path | None:
+    if value is None:
+        return None
+    if manifest_root is None:
+        return resolve_path(fallback_root, str(value) if isinstance(value, str) else None)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Invalid manifest.path in {config_path}: expected non-empty string")
+    relative_path = Path(value)
+    if relative_path.is_absolute() or any(part == ".." for part in relative_path.parts):
+        raise ValueError(f"Invalid manifest.path in {config_path}: path must stay inside the manifests root")
+    return (manifest_root.resolve() / relative_path).resolve()

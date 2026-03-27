@@ -34,37 +34,40 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Resolve target config
+      - name: Resolve source target definition
         id: target
         run: |
-          TARGET_CONFIG="configs/targets/${{ inputs.target }}.toml"
-          if [ ! -f "$TARGET_CONFIG" ]; then
-            echo "::error::Missing target config: $TARGET_CONFIG"
+          SOURCE_TARGET_FILE="configs/targets/${{ inputs.target }}.toml"
+          if [ ! -f "$SOURCE_TARGET_FILE" ]; then
+            echo "::error::Missing source target definition: $SOURCE_TARGET_FILE"
             echo "Available configs:"
             ls configs/targets/*.toml
             exit 1
           fi
-          echo "target_config=$TARGET_CONFIG" >> "$GITHUB_OUTPUT"
+          echo "source_target_file=$SOURCE_TARGET_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Package minimal image context
+        run: python3 scripts/package-image.py --output-dir .image-package
 
       - name: Build, warm, and push workspace image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: docker/workspace.Dockerfile
+          context: .image-package
+          file: .image-package/docker/workspace.Dockerfile
           build-args: |
             BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm
-            TARGET_CONFIG=${{ steps.target.outputs.target_config }}
+            SOURCE_TARGET_FILE=${{ steps.target.outputs.source_target_file }}
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/gki-workspace:${{ inputs.tag }}
 
       - name: Build, warm, and push snapshot image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: docker/snapshot.Dockerfile
+          context: .image-package
+          file: .image-package/docker/snapshot.Dockerfile
           build-args: |
             BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm
-            TARGET_CONFIG=${{ steps.target.outputs.target_config }}
+            SOURCE_TARGET_FILE=${{ steps.target.outputs.source_target_file }}
             SNAPSHOT_GIT_PROJECTS=common
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/gki-snapshot:${{ inputs.tag }}

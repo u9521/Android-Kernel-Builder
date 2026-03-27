@@ -1,99 +1,87 @@
 # Common Files In Container Images
 
-This document describes the common files and paths that appear in the base and workspace images.
+This document describes the main fixed paths used by Docker images.
 
-## Base Image
+## Fixed Roots
 
-### `${GKI_WORKSPACE_ROOT}`
+### `/workspace`
 
-- Default: `/workspace`
-- Default working directory for the base image.
-- Parent location for the workspace image contents.
+- Fixed container work root.
 
-### `/usr/local/bin/repo`
+### `/workspace/.akb`
 
-- The downloaded `repo` launcher.
-- Installed by the base image so `repo init` and `repo sync` can run later.
+- Minimal AKB runtime payload.
+- Does not contain the full source repository.
 
-### `${VIRTUAL_ENV}`
+### `/workspace/docker_metadata`
 
-- Default: `/opt/venv`
-- Python virtual environment used by the image.
+- Docker-only metadata root.
 
-## Workspace Image
+### `/workspace/.cache`
 
-### `${GKI_BUILDER_ROOT}`
+- Reusable cache root.
 
-- Default: `${GKI_WORKSPACE_ROOT}/.gki-builder/tooling`
-- Copy of this repository inside the image.
-- Contains the checked-in Python package, Docker scripts, configs, and helper files.
+### `/workspace/out`
 
-### `${GKI_TARGET_CONFIG}`
+- Common output root used by image warmup and downstream CI.
 
-- Default: `${GKI_WORKSPACE_ROOT}/.gki-builder/image/target-config.toml`
-- Target config copied into the image during `docker-build-workspace`.
-- Used by downstream `gki-builder build` invocations inside the container.
+## Runtime Config Files
 
-### `${GKI_ENV_FILE}`
+### `/workspace/.akb/active-target.toml`
 
-- Default: `${GKI_WORKSPACE_ROOT}/.gki-builder/image/gki-builder.env`
+- The single active target embedded into the image.
+- Runtime `gki-builder` commands read this by default inside Docker.
+
+### `/workspace/.akb/manifests/`
+
+- Embedded manifest directory.
+- Contains only the manifest files needed by the selected image target.
+
+### `/workspace/docker_metadata/gki-builder.env`
+
 - Generated shell fragment loaded by `docker/entrypoint.sh`.
-- Exports image-derived values such as `GKI_TARGET_NAME` and `GKI_SOURCE_ROOT`.
+- Exports target, build, and manifest metadata for downstream CI scripts.
 
 ### `/usr/local/bin/gki-workspace-entrypoint`
 
-- Installed entrypoint script for the workspace image.
-- Sources `${GKI_ENV_FILE}` and then executes the requested command.
+- Image entrypoint helper.
+- Sources `/workspace/docker_metadata/gki-builder.env` and then runs the requested command.
+
+## Source Tree
 
 ### `${GKI_SOURCE_ROOT}`
 
-- Usually something like `${GKI_WORKSPACE_ROOT}/android-kernel`
-- Synced Android kernel source tree created by `prepare-workspace`.
+- Usually `/workspace/android-kernel`.
+- Created by `gki-builder sync-source` during image build.
 
-### `${GKI_CACHE_ROOT}`
+## Cache Layout
 
-- Default: `${GKI_WORKSPACE_ROOT}/.cache`
-- Root directory for reusable build caches.
-
-### `${GKI_CACHE_ROOT}/repo`
+### `/workspace/.cache/repo`
 
 - Repo reference cache.
-- Reused across syncs to reduce network and checkout cost.
 
-### `${GKI_CACHE_ROOT}/bazel`
+### `/workspace/.cache/bazel`
 
 - Bazel disk cache.
-- Reused across Kleaf builds.
 
-### `${GKI_CACHE_ROOT}/ccache`
+### `/workspace/.cache/ccache`
 
-- C/C++ compiler cache.
-- Reused across compatible rebuilds.
+- Compiler cache.
 
-### `${GKI_WORKSPACE_ROOT}/.gki-builder/<target>/workspace.json`
+## Target Metadata
 
-- Metadata written after `prepare-workspace`.
-- Records manifest details, selected target, cache layout, and related workspace information.
+### `/workspace/docker_metadata/targets/<target>/workspace.json`
 
-### `${GKI_WORKSPACE_ROOT}/.gki-builder/<target>/disk-usage.json`
+- Metadata written after `gki-builder sync-source`.
 
-- Metadata written after `gki-builder build`.
-- Records measured disk usage for source, repo metadata, caches, outputs, and workspace metadata.
+### `/workspace/docker_metadata/targets/<target>/disk-usage.json`
 
-### `${GKI_WORKSPACE_ROOT}/.gki-builder/<target>/warmup-outputs.json`
+- Metadata written after `gki-builder build` or `gki-builder warmup-build`.
 
-- Metadata written after `gki-builder warmup-build` when a `warmup_target` is used.
-- Records the warmup target and the exported file list copied under the chosen output root.
+### `/workspace/docker_metadata/targets/<target>/warmup-outputs.json`
 
-### `${GKI_WORKSPACE_ROOT}/.gki-builder/<target>/snapshot.json`
+- Metadata written after `gki-builder warmup-build` when a warmup target is configured.
 
-- Metadata written by the `snapshot` variant of `docker-build-workspace`.
-- Records which repo projects were preserved as standalone Git repositories after `.repo` metadata was removed.
+### `/workspace/docker_metadata/targets/<target>/snapshot.json`
 
-## Downstream Files
-
-The workspace image does not reserve a fixed path for downstream patch repositories, but the recommended pattern is to mount them under a subdirectory of `${GKI_WORKSPACE_ROOT}`.
-
-Example:
-
-- `${GKI_WORKSPACE_ROOT}/downstream/patches/my-change.patch`
+- Metadata written by snapshot image generation.

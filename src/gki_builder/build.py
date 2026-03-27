@@ -8,6 +8,7 @@ import os
 import shutil
 from pathlib import Path
 
+from . import layout
 from .targets import TargetConfig
 from .utils import directory_size_bytes, ensure_directory, format_bytes, run_command, write_json
 from .workspace import build_environment
@@ -34,7 +35,7 @@ def build_kernel(
         _build_kleaf(target, source_dir, cache_root, output_dir, env)
 
     usage_report = analyze_workspace_usage(target, workspace_root.resolve(), cache_root, output_dir)
-    metadata_dir = ensure_directory((workspace_root / target.workspace.metadata_dir / target.name).resolve())
+    metadata_dir = ensure_directory(_target_metadata_root(workspace_root.resolve(), target))
     write_json(metadata_dir / "disk-usage.json", usage_report)
     _print_usage_report(usage_report)
 
@@ -57,7 +58,7 @@ def warmup_kernel(
     _warmup_kleaf(target, source_dir, cache_root, env)
     exported_files = _export_warmup_kleaf_outputs(target, source_dir, output_dir, env)
 
-    metadata_dir = ensure_directory((workspace_root / target.workspace.metadata_dir / target.name).resolve())
+    metadata_dir = ensure_directory(_target_metadata_root(workspace_root.resolve(), target))
     write_json(
         metadata_dir / "warmup-outputs.json",
         {
@@ -80,7 +81,7 @@ def analyze_workspace_usage(
     output_dir: Path,
 ) -> dict[str, object]:
     source_dir = (workspace_root / target.workspace.source_dir).resolve()
-    metadata_dir = (workspace_root / target.workspace.metadata_dir / target.name).resolve()
+    metadata_dir = _target_metadata_root(workspace_root.resolve(), target)
     repo_metadata_dir = source_dir / ".repo"
     repo_reference_dir = (cache_root / target.cache.repo_dir).resolve()
     bazel_cache_dir = (cache_root / target.cache.bazel_dir).resolve()
@@ -113,6 +114,13 @@ def _usage_entry(path: Path, size_bytes: int) -> dict[str, object]:
         "bytes": size_bytes,
         "human": format_bytes(size_bytes),
     }
+
+
+def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path:
+    metadata_dir = target.workspace.metadata_dir
+    if metadata_dir == layout.docker_target_metadata_relative_dir():
+        return layout.docker_target_metadata_root(workspace_root, target.name)
+    return layout.host_target_metadata_root(workspace_root, target.name)
 
 
 def _print_usage_report(report: dict[str, object]) -> None:

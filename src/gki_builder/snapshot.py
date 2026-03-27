@@ -4,12 +4,16 @@
 
 from __future__ import annotations
 
-import os
+import argparse
 import shutil
 import tempfile
 from pathlib import Path
 
-from .utils import ensure_directory, run_command, write_json
+from . import layout
+from .environment import discover_current_environment
+from .global_config import load_global_config
+from .target_store import resolve_target
+from .utils import discover_project_root, ensure_directory, run_command, write_json
 
 DEFAULT_SNAPSHOT_GIT_PROJECTS = ("common",)
 
@@ -59,13 +63,44 @@ def create_workspace_snapshot(
     return snapshot
 
 
-def create_workspace_snapshot_from_env() -> None:
-    workspace_root = Path(os.environ["GKI_WORKSPACE_ROOT"])
-    source_root = Path(os.environ["GKI_SOURCE_ROOT"])
-    target_name = os.environ.get("GKI_TARGET_NAME", "target")
-    metadata_dir = workspace_root / ".gki-builder" / target_name
-    preserve_git_projects = parse_snapshot_git_projects(os.environ.get("GKI_SNAPSHOT_GIT_PROJECTS"))
-    create_workspace_snapshot(workspace_root, source_root, metadata_dir, preserve_git_projects)
+def create_workspace_snapshot_for_current_environment(
+    *,
+    workspace_root: str | Path | None = None,
+    preserve_git_projects: list[str] | None = None,
+    start_dir: Path | None = None,
+) -> dict[str, object]:
+    environment = discover_current_environment(start_dir)
+    if environment.mode != "docker":
+        raise ValueError("Snapshot runtime flow is only supported inside Docker images")
+
+    global_config = load_global_config(_discover_project_root(start_dir))
+    target = resolve_target(environment)
+    resolved_workspace_root = Path(workspace_root).resolve() if workspace_root is not None else environment.work_root
+    return create_workspace_snapshot(
+        resolved_workspace_root,
+        resolved_workspace_root / target.workspace.source_dir,
+        layout.docker_metadata_root(resolved_workspace_root) / "targets" / target.name,
+        preserve_git_projects or list(global_config.snapshot_git_projects),
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Create a Docker snapshot from a prepared workspace")
+    parser.add_argument(
+        "--workspace-root",
+        default=str(layout.DOCKER_WORK_ROOT),
+        help="Workspace root path; defaults to /workspace",
+    )
+    parser.add_argument(
+        "--snapshot-git-projects",
+        default=None,
+        help="Comma-separated repo projects to preserve; defaults to configs/global.toml [snapshot].git_projects",
+    )
+    return parser.parse_args()
+
+
+def _discover_project_root(project_root: Path | None) -> Path:
+    return discover_project_root(project_root or Path.cwd())
 
 
 def _clone_standalone_repo(project_path: Path, destination: Path) -> Path:
@@ -93,4 +128,12 @@ def _remove_repo_metadata(source_dir: Path, preserved_projects: list[str]) -> No
 
 
 if __name__ == "__main__":
-    create_workspace_snapshot_from_env()
+    args = parse_args()
+    create_workspace_snapshot_for_current_environment(
+        workspace_root=args.workspace_root,
+        preserve_git_projects=(
+            parse_snapshot_git_projects(args.snapshot_git_projects)
+            if args.snapshot_git_projects is not None
+            else None
+        ),
+    )

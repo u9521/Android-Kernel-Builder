@@ -4,7 +4,7 @@ name = "avd-android14-6.1-x64"
 source = "local"
 url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android14-6.1"
-path = "../../manifests/avd/avd-android-14-6.1_x64.xml"
+path = "manifests/avd/avd-android-14-6.1_x64.xml"
 minimal = true
 
 [build]
@@ -23,4 +23,3 @@ ccache_dir = "ccache"
 
 [workspace]
 source_dir = "android-kernel"
-metadata_dir = ".gki-builder"

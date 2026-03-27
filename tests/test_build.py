@@ -20,13 +20,13 @@ class BuildUsageTests(unittest.TestCase):
     def test_analyze_workspace_usage_splits_source_repo_cache_and_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
-            workspace_root = temp_root / ".workspace"
+            workspace_root = temp_root / "work"
             cache_root = temp_root / ".cache"
             output_root = temp_root / "out"
 
             source_dir = workspace_root / "android-kernel"
             repo_dir = source_dir / ".repo"
-            metadata_dir = workspace_root / ".gki-builder" / "sample"
+            metadata_dir = workspace_root / ".akb" / "state" / "targets" / "sample"
             repo_reference_dir = cache_root / "repo"
             bazel_dir = cache_root / "bazel"
             ccache_dir = cache_root / "ccache"
@@ -56,7 +56,7 @@ class BuildUsageTests(unittest.TestCase):
                 manifest=targets.ManifestConfig(source="remote"),
                 build=targets.BuildConfig(system="kleaf", arch="aarch64", dist_dir="dist"),
                 cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
-                workspace=targets.WorkspaceConfig(source_dir="android-kernel", metadata_dir=".gki-builder"),
+                workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
                 config_path=Path("sample.toml"),
             )
 
@@ -75,7 +75,7 @@ class BuildUsageTests(unittest.TestCase):
     def test_warmup_kernel_uses_bazel_build_for_warmup_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
-            workspace_root = temp_root / ".workspace"
+            workspace_root = temp_root / "work"
             cache_root = temp_root / ".cache"
             output_root = temp_root / "out"
             source_dir = workspace_root / "android-kernel"
@@ -91,7 +91,7 @@ class BuildUsageTests(unittest.TestCase):
                     warmup_target="//common:kernel_{arch}",
                 ),
                 cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
-                workspace=targets.WorkspaceConfig(source_dir="android-kernel", metadata_dir=".gki-builder"),
+                workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
                 config_path=Path("sample.toml"),
             )
 
@@ -102,7 +102,7 @@ class BuildUsageTests(unittest.TestCase):
             warmup_kleaf.assert_called_once()
             self.assertEqual(output_dir, (output_root / target.build.dist_dir).resolve())
             metadata = json.loads(
-                (workspace_root / ".gki-builder" / "sample" / "warmup-outputs.json").read_text(encoding="utf-8")
+                (workspace_root / ".akb" / "state" / "targets" / "sample" / "warmup-outputs.json").read_text(encoding="utf-8")
             )
             self.assertEqual(metadata["warmup_target"], "//common:kernel_{arch}")
 

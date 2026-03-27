@@ -9,55 +9,80 @@ import unittest
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src").resolve()))
 
-load_target_config = importlib.import_module("gki_builder.targets").load_target_config
+layout = importlib.import_module("gki_builder.layout")
+target_store = importlib.import_module("gki_builder.target_store")
 
 
 class TargetConfigTests(unittest.TestCase):
     def test_load_remote_target(self) -> None:
-        target = load_target_config("configs/targets/android15-6.6.toml")
-        self.assertEqual(target.name, "android15-6.6")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+autodetect_deprecated = true
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""",
+            )
+
+            target = target_store.load_host_target(work_root, "sample")
+
+        self.assertEqual(target.name, "sample")
         self.assertEqual(target.manifest.source, "remote")
         self.assertTrue(target.manifest.autodetect_deprecated)
         self.assertGreater(target.build.jobs, 0)
         self.assertEqual(target.build.system, "kleaf")
 
-    def test_load_local_target_with_relative_manifest(self) -> None:
+    def test_load_local_target_with_manifest_root_relative_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_root = Path(temp_dir)
-            manifests = temp_root / "manifests"
-            manifests.mkdir(parents=True)
-            (manifests / "default.xml").write_text("<manifest />\n", encoding="utf-8")
-
-            config = temp_root / "target.toml"
-            config.write_text(
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            manifest_root = layout.target_manifests_root(work_root)
+            manifest_root.mkdir(parents=True, exist_ok=True)
+            (manifest_root / "default.xml").write_text("<manifest />\n", encoding="utf-8")
+            self._write_target(
+                work_root,
+                "sample",
                 """
 name = "sample"
 
 [manifest]
 source = "local"
 url = "https://example.com/manifest"
-path = "manifests/default.xml"
+path = "default.xml"
 minimal = true
 
 [build]
 system = "kleaf"
 arch = "aarch64"
-""".strip()
-                + "\n",
-                encoding="utf-8",
+""",
             )
 
-            target = load_target_config(config)
-            self.assertEqual(target.manifest.path, manifests.resolve() / "default.xml")
-            self.assertEqual(target.manifest.url, "https://example.com/manifest")
-            self.assertTrue(target.manifest.minimal)
-            self.assertFalse(target.manifest.autodetect_deprecated)
+            target = target_store.load_host_target(work_root, "sample")
+
+        self.assertEqual(target.manifest.path, manifest_root / "default.xml")
+        self.assertEqual(target.manifest.url, "https://example.com/manifest")
+        self.assertTrue(target.manifest.minimal)
+        self.assertFalse(target.manifest.autodetect_deprecated)
 
     def test_loads_optional_warmup_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_root = Path(temp_dir)
-            config = temp_root / "target.toml"
-            config.write_text(
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
                 """
 name = "sample"
 
@@ -71,19 +96,20 @@ system = "kleaf"
 arch = "aarch64"
 target = "//common:kernel_{arch}_dist"
 warmup_target = "//common:kernel_{arch}"
-""".strip()
-                + "\n",
-                encoding="utf-8",
+""",
             )
 
-            target = load_target_config(config)
-            self.assertEqual(target.build.warmup_target, "//common:kernel_{arch}")
+            target = target_store.load_host_target(work_root, "sample")
+
+        self.assertEqual(target.build.warmup_target, "//common:kernel_{arch}")
 
     def test_requires_explicit_build_system(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_root = Path(temp_dir)
-            config = temp_root / "target.toml"
-            config.write_text(
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
                 """
 name = "sample"
 
@@ -94,19 +120,19 @@ branch = "common-android15-6.6"
 
 [build]
 arch = "aarch64"
-""".strip()
-                + "\n",
-                encoding="utf-8",
+""",
             )
 
             with self.assertRaisesRegex(ValueError, "build.system"):
-                load_target_config(config)
+                target_store.load_host_target(work_root, "sample")
 
     def test_rejects_non_positive_build_jobs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_root = Path(temp_dir)
-            config = temp_root / "target.toml"
-            config.write_text(
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
                 """
 name = "sample"
 
@@ -119,19 +145,19 @@ branch = "common-android15-6.6"
 system = "kleaf"
 arch = "aarch64"
 jobs = 0
-""".strip()
-                + "\n",
-                encoding="utf-8",
+""",
             )
 
             with self.assertRaisesRegex(ValueError, "Build jobs must be positive"):
-                load_target_config(config)
+                target_store.load_host_target(work_root, "sample")
 
     def test_rejects_warmup_target_for_legacy_builds(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_root = Path(temp_dir)
-            config = temp_root / "target.toml"
-            config.write_text(
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
                 """
 name = "sample"
 
@@ -145,13 +171,48 @@ system = "legacy"
 arch = "aarch64"
 legacy_config = "build.config.gki"
 warmup_target = "//common:kernel_{arch}"
-""".strip()
-                + "\n",
-                encoding="utf-8",
+""",
             )
 
             with self.assertRaisesRegex(ValueError, "build.warmup_target"):
-                load_target_config(config)
+                target_store.load_host_target(work_root, "sample")
+
+    def test_rejects_configurable_workspace_metadata_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+
+[workspace]
+source_dir = "android-kernel"
+metadata_dir = ".gki-builder"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "workspace.metadata_dir"):
+                target_store.load_host_target(work_root, "sample")
+
+    def _write_akb_config(self, work_root: Path) -> None:
+        layout.akb_config_file(work_root).parent.mkdir(parents=True, exist_ok=True)
+        layout.akb_config_file(work_root).write_text("version = 1\n", encoding="utf-8")
+
+    def _write_target(self, work_root: Path, target_name: str, content: str) -> None:
+        target_path = layout.target_config_file(work_root, target_name)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(content.strip() + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

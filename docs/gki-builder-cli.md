@@ -1,109 +1,74 @@
 # gki-builder CLI
 
-This document summarizes the main `gki-builder` commands and when to use them.
+This document summarizes the current `gki-builder` commands.
 
 ## Common Flow
 
-Typical local usage:
+Host environment flow:
 
-1. `bootstrap`
-2. `prepare-workspace`
+0. `install.sh`
+1. `show-target`
+2. `sync-source`
 3. `build`
 
-Typical workspace-image flow:
+Docker image flow:
 
 1. `docker-build-base`
-2. `docker-build-workspace`
-3. `docker-run`
-
-Typical snapshot-image flow:
-
-1. `docker-build-base`
-2. `docker-build-snapshot`
+2. `docker-build-workspace` or `docker-build-snapshot`
 3. `docker-run`
 
 ## Commands
 
 ### `show-target`
 
-- Loads a target config and prints the resolved config as JSON.
-- Useful for checking manifest paths, cache directories, and build settings after path resolution.
+- Prints the resolved target as JSON.
+- Host mode: uses `--target` or `.akb/config.toml` `default_target`.
+- Docker mode: uses `/workspace/.akb/active-target.toml`.
 
 Example:
 
 ```bash
-gki-builder show-target --target-config configs/targets/android15-6.6.toml
+gki-builder show-target --target android15-6.6
 ```
 
-### `bootstrap`
-
-- Creates local workspace, cache, and output directories.
-- Does not sync source or build anything.
-
-Example:
-
-```bash
-gki-builder bootstrap \
-  --workspace .workspace \
-  --cache-root .cache \
-  --output-root out
-```
-
-### `prepare-workspace`
+### `sync-source`
 
 - Runs `repo init` and `repo sync` for the selected target.
-- Writes workspace metadata under `<workspace>/.gki-builder/<target>/workspace.json`.
+- Writes workspace metadata under `<work-root>/<metadata-dir>/<target>/workspace.json`.
 
 Example:
 
 ```bash
-gki-builder prepare-workspace \
-  --target-config configs/targets/android15-6.6.toml \
-  --workspace .workspace \
-  --cache-root .cache
+gki-builder sync-source --target android15-6.6
 ```
 
 ### `build`
 
-- Performs the normal kernel build for the configured target.
-- For `kleaf`, this runs the configured `build.target`.
-- Writes build outputs under `<output-root>/<dist_dir>`.
-- Prints disk usage analysis and writes `<workspace>/.gki-builder/<target>/disk-usage.json`.
+- Builds the configured kernel target.
+- Writes outputs under `<output-root>/<dist_dir>`.
+- Writes disk usage metadata under `<metadata-dir>/<target>/disk-usage.json`.
 
 Example:
 
 ```bash
-gki-builder build \
-  --target-config configs/targets/android15-6.6.toml \
-  --workspace .workspace \
-  --cache-root .cache \
-  --output-root out
+gki-builder build --target android15-6.6 --output-root out
 ```
 
 ### `warmup-build`
 
-- Warms build caches for image creation or local reuse.
-- If `build.warmup_target` is set for a `kleaf` target, this runs `bazel build <warmup_target>`.
-- Exports the warmup target's default output files to `<output-root>/<dist_dir>` so downstream users can reuse kernel-only artifacts without building ramdisk or dist packaging.
-- Writes `<workspace>/.gki-builder/<target>/warmup-outputs.json` with the exported file list.
-- Otherwise, it falls back to the normal `build` behavior.
-- Useful when the normal build target also creates ramdisk, boot, or partition images and you want a lighter warmup step.
+- Warms caches for the selected target.
+- Uses `build.warmup_target` when configured for Kleaf targets.
+- Writes warmup metadata under `<metadata-dir>/<target>/warmup-outputs.json`.
 
 Example:
 
 ```bash
-gki-builder warmup-build \
-  --target-config configs/targets/avd-android16-6.12-x64.toml \
-  --workspace .workspace \
-  --cache-root .cache \
-  --output-root out
+gki-builder warmup-build --target android15-6.6 --output-root out
 ```
 
 ### `docker-build-base`
 
-- Builds the minimal base image used by workspace images.
-
-Example:
+- Builds the minimal base image used by workspace and snapshot images.
 
 ```bash
 gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
@@ -111,83 +76,64 @@ gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 
 ### `docker-build-workspace`
 
-- Builds a pre-warmed workspace image on top of the base image.
-- During image creation, it prepares the source tree and runs `warmup-build`.
-- Installs `gki-builder` into `/usr/local/bin` as well as the virtualenv so login-shell workflows can still find it in `PATH`.
-
-Example:
+- Builds a pre-warmed one-image-one-target CI image.
+- Embeds one `active-target.toml` and only the manifest files needed by that target.
+- The final image contains a stripped runtime payload, not the full AKB repository checkout.
 
 ```bash
 gki-builder docker-build-workspace \
   --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
   --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target-config configs/targets/android15-6.6.toml
+  --target android15-6.6
 ```
 
 ### `docker-build-snapshot`
 
-- Builds a snapshot-oriented image on top of the base image.
-- During image creation, it prepares the source tree, runs `warmup-build`, exports warmup artifacts, then removes `.repo` metadata.
-- Preserves selected repo projects as standalone Git repositories so downstream patch workflows can still commit changes.
-- Defaults to preserving `common`.
-- Snapshot images are intended for Git operations inside the preserved project directories, not for `repo` commands.
-- Installs `gki-builder` into `/usr/local/bin` as well as the virtualenv so login-shell workflows can still find it in `PATH`.
-
-Example:
+- Builds a snapshot-oriented one-image-one-target CI image.
+- Runs warmup, then removes `.repo` metadata while preserving selected Git projects.
 
 ```bash
 gki-builder docker-build-snapshot \
   --tag ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
   --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target-config configs/targets/android15-6.6.toml \
+  --target android15-6.6 \
   --snapshot-git-projects common
 ```
 
 ### `docker-run`
 
-- Runs a built workspace image with local workspace, cache, and output directories mounted in.
-- If no command is provided, it opens an interactive shell.
-
-Example:
+- Runs an existing image with host workspace, cache, and output directories mounted into `/workspace`, `/workspace/.cache`, and `/workspace/out`.
 
 ```bash
 gki-builder docker-run \
   --image ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  --workspace .workspace \
-  --cache-root .cache \
+  --workspace work \
   --output-root out \
   -- bash -lc 'cd "$GKI_SOURCE_ROOT" && tools/bazel help'
 ```
 
 ## Important Inputs
 
-### `--target-config`
+### `--target`
 
-- Used by `show-target`, `prepare-workspace`, `build`, `warmup-build`, and `docker-build-workspace`.
-- Points to a target file under `configs/targets/` or a custom config file.
+- Used by `show-target`, `sync-source`, `build`, `warmup-build`, `docker-build-workspace`, and `docker-build-snapshot`.
+- Host mode resolves it from `.akb/targets/configs/<name>.toml`.
+- Docker runtime commands ignore it and use the embedded active target by default.
 
 ### `--snapshot-git-projects`
 
 - Used by `docker-build-snapshot`.
-- Comma-separated list of repo projects to preserve as standalone Git repositories inside the snapshot image.
-- Default: `common`
-
-### `--workspace`
-
-- Root directory for synced source and workspace metadata.
+- Comma-separated repo projects to preserve as standalone Git repositories.
+- Default comes from `configs/global.toml` `[snapshot].git_projects`.
 
 ### `--cache-root`
 
-- Root directory for reusable repo, Bazel, and ccache data.
+- Optional cache-root override.
+- Host mode defaults to `.akb/config.toml` `workspace.cache_dir`.
+- `docker-run` defaults to `<workspace>/.cache`.
 
 ### `--output-root`
 
-- Root directory for build results.
-- Final outputs are written under `<output-root>/<dist_dir>` for normal builds.
-
-## Related Docs
-
-- `docs/configuration.md`
-- `docs/environment-variables.md`
-- `docs/image-files.md`
-- `docs/manifest-modes.md`
+- Optional output-root override.
+- Host mode defaults to `.akb/config.toml` `workspace.output_dir`.
+- `docker-run` defaults to `<workspace>/out`.

@@ -4,7 +4,9 @@
 
 set -euo pipefail
 
-if [[ -n "${GKI_ENV_FILE:-}" && -f "${GKI_ENV_FILE}" ]]; then
+readonly GKI_ENV_FILE="/workspace/docker_metadata/gki-builder.env"
+
+if [[ -f "${GKI_ENV_FILE}" ]]; then
   # shellcheck disable=SC1090
   source "${GKI_ENV_FILE}"
 fi
