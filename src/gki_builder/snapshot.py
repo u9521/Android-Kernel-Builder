@@ -9,10 +9,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from .active_target import load_active_target
 from . import layout
 from .environment import discover_current_environment
 from .global_config import load_global_config
-from .target_store import resolve_target
 from .utils import discover_project_root, ensure_directory, run_command, write_json
 
 DEFAULT_SNAPSHOT_GIT_PROJECTS = ("common",)
@@ -73,13 +73,27 @@ def create_workspace_snapshot_for_current_environment(
     if environment.mode != "docker":
         raise ValueError("Snapshot runtime flow is only supported inside Docker images")
 
-    global_config = load_global_config(_discover_project_root(start_dir))
-    target = resolve_target(environment)
     resolved_workspace_root = Path(workspace_root).resolve() if workspace_root is not None else environment.work_root
-    return create_workspace_snapshot(
+    return create_workspace_snapshot_from_workspace_root(
         resolved_workspace_root,
-        resolved_workspace_root / target.workspace.source_dir,
-        layout.docker_metadata_root(resolved_workspace_root) / "targets" / target.name,
+        preserve_git_projects=preserve_git_projects,
+        project_root=_discover_project_root(start_dir),
+    )
+
+
+def create_workspace_snapshot_from_workspace_root(
+    workspace_root: Path,
+    *,
+    preserve_git_projects: list[str] | None = None,
+    project_root: Path | None = None,
+) -> dict[str, object]:
+    workspace_root = workspace_root.resolve()
+    target = load_active_target(workspace_root)
+    global_config = load_global_config(project_root or _discover_project_root(workspace_root))
+    return create_workspace_snapshot(
+        workspace_root,
+        workspace_root / target.workspace.source_dir,
+        layout.docker_target_metadata_root(workspace_root, target.name),
         preserve_git_projects or list(global_config.snapshot_git_projects),
     )
 

@@ -40,6 +40,14 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(resolved.mode, "docker")
         self.assertEqual(resolved.work_root, layout.DOCKER_WORK_ROOT)
 
+    def test_discover_current_environment_uses_embedded_docker_layout_without_dockerenv(self) -> None:
+        with mock.patch.object(environment, "is_docker_runtime", return_value=False):
+            with mock.patch.object(environment, "has_embedded_docker_layout", return_value=True):
+                resolved = environment.discover_current_environment(Path("/tmp/ignored"))
+
+        self.assertEqual(resolved.mode, "docker")
+        self.assertEqual(resolved.work_root, layout.DOCKER_WORK_ROOT)
+
 
 if __name__ == "__main__":
     unittest.main()

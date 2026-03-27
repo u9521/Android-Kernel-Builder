@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 u9521
 
-name: build-workspace-image
+name: build-container-images
 
 on:
   workflow_dispatch:
@@ -17,7 +17,20 @@ on:
 
 jobs:
   build:
+    name: Build and push ${{ matrix.image_name }} image
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image_name: workspace
+            image_repo: gki-workspace
+            dockerfile: .image-package/docker/workspace.Dockerfile
+            snapshot_git_projects: ""
+          - image_name: snapshot
+            image_repo: gki-snapshot
+            dockerfile: .image-package/docker/snapshot.Dockerfile
+            snapshot_git_projects: common
     permissions:
       contents: read
       packages: write
@@ -49,25 +62,19 @@ jobs:
       - name: Package minimal image context
         run: python3 scripts/package-image.py --output-dir .image-package
 
-      - name: Build, warm, and push workspace image
-        uses: docker/build-push-action@v6
-        with:
-          context: .image-package
-          file: .image-package/docker/workspace.Dockerfile
-          build-args: |
-            BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm
-            SOURCE_TARGET_FILE=${{ steps.target.outputs.source_target_file }}
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/gki-workspace:${{ inputs.tag }}
+      - name: Build and push ${{ matrix.image_name }} image
+        run: |
+          set -euo pipefail
+          extra_build_args=()
+          if [ -n "${{ matrix.snapshot_git_projects }}" ]; then
+            extra_build_args+=(--build-arg "SNAPSHOT_GIT_PROJECTS=${{ matrix.snapshot_git_projects }}")
+          fi
 
-      - name: Build, warm, and push snapshot image
-        uses: docker/build-push-action@v6
-        with:
-          context: .image-package
-          file: .image-package/docker/snapshot.Dockerfile
-          build-args: |
-            BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm
-            SOURCE_TARGET_FILE=${{ steps.target.outputs.source_target_file }}
-            SNAPSHOT_GIT_PROJECTS=common
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/gki-snapshot:${{ inputs.tag }}
+          docker buildx build \
+            --file "${{ matrix.dockerfile }}" \
+            --build-arg BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm \
+            --build-arg SOURCE_TARGET_FILE=${{ steps.target.outputs.source_target_file }} \
+            --tag ghcr.io/${{ github.repository_owner }}/${{ matrix.image_repo }}:${{ inputs.tag }} \
+            --push \
+            "${extra_build_args[@]}" \
+            .image-package

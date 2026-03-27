@@ -19,6 +19,10 @@ def is_docker_runtime() -> bool:
     return Path("/.dockerenv").exists()
 
 
+def has_embedded_docker_layout() -> bool:
+    return layout.active_target_file(layout.DOCKER_WORK_ROOT).exists()
+
+
 def discover_host_work_root(start_dir: Path | None = None) -> Path:
     current = (start_dir or Path.cwd()).resolve()
     for candidate in [current, *current.parents]:
@@ -30,6 +34,6 @@ def discover_host_work_root(start_dir: Path | None = None) -> Path:
 
 
 def discover_current_environment(start_dir: Path | None = None) -> AkbEnvironment:
-    if is_docker_runtime():
+    if is_docker_runtime() or has_embedded_docker_layout():
         return AkbEnvironment(mode="docker", work_root=layout.DOCKER_WORK_ROOT)
     return AkbEnvironment(mode="host", work_root=discover_host_work_root(start_dir))

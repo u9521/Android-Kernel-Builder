@@ -105,6 +105,48 @@ source_dir = "android-kernel"
             self.assertEqual(result["preserved_git_projects"], ["common"])
             self.assertTrue((metadata_dir / "snapshot.json").exists())
 
+    def test_create_workspace_snapshot_from_workspace_root_uses_active_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            workspace_root = temp_root / "workspace"
+            source_dir = workspace_root / "android-kernel"
+            metadata_dir = workspace_root / "docker_metadata" / "targets" / "sample"
+            common_dir = source_dir / "common"
+            common_dir.mkdir(parents=True, exist_ok=True)
+            (source_dir / ".repo" / "manifests").mkdir(parents=True, exist_ok=True)
+            (temp_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            layout.active_target_file(workspace_root).parent.mkdir(parents=True, exist_ok=True)
+            layout.active_target_file(workspace_root).write_text(
+                """
+version = 1
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+
+[workspace]
+source_dir = "android-kernel"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            self._init_git_repo(common_dir, "README.md", "common")
+            self._convert_to_gitfile(common_dir, temp_root / "gitdirs" / "common.git")
+
+            result = snapshot.create_workspace_snapshot_from_workspace_root(workspace_root, project_root=temp_root)
+
+            self.assertEqual(result["preserved_git_projects"], ["common"])
+            self.assertFalse((source_dir / ".repo").exists())
+            self.assertTrue((common_dir / ".git").is_dir())
+            self.assertTrue((metadata_dir / "snapshot.json").exists())
+
     def _init_git_repo(self, path: Path, file_name: str, content: str) -> None:
         path.mkdir(parents=True, exist_ok=True)
         (path / file_name).write_text(content + "\n", encoding="utf-8")

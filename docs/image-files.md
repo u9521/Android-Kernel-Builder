@@ -85,3 +85,9 @@ This document describes the main fixed paths used by Docker images.
 ### `/workspace/docker_metadata/targets/<target>/snapshot.json`
 
 - Metadata written by snapshot image generation.
+
+## CI Packaging Notes
+
+- The CI workflow builds workspace and snapshot images as separate matrix jobs.
+- Both images use the same base image and embedded target definition.
+- The snapshot image is built directly from its own Dockerfile, so `.repo` cleanup happens within the snapshot image build instead of by repackaging a prepared workspace.
