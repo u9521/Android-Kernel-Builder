@@ -4,6 +4,8 @@
 
 import importlib
 from pathlib import Path
+import subprocess
+import tempfile
 import sys
 import unittest
 from unittest import mock
@@ -77,6 +79,109 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(run_container.call_args.args[2], Path("/tmp/workspace/.cache"))
+
+    def test_add_git_safe_adds_input_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            args = cli.build_parser().parse_args(["add-git-safe", str(root)])
+
+            completed_empty = subprocess.CompletedProcess(
+                ["git", "config", "--global", "--get-all", "safe.directory"],
+                0,
+                stdout="",
+            )
+            completed_empty_system = subprocess.CompletedProcess(
+                ["git", "config", "--system", "--get-all", "safe.directory"],
+                0,
+                stdout="",
+            )
+            completed_ok_global = subprocess.CompletedProcess(
+                ["git", "config", "--global", "--add", "safe.directory", str(root)],
+                0,
+                stdout="",
+            )
+            completed_ok_system = subprocess.CompletedProcess(
+                ["git", "config", "--system", "--add", "safe.directory", str(root)],
+                0,
+                stdout="",
+            )
+
+            with mock.patch.object(
+                cli,
+                "run_command",
+                side_effect=[completed_empty, completed_empty_system, completed_ok_global, completed_ok_system],
+            ) as run_command:
+                with mock.patch("builtins.print"):
+                    result = args.handler(args)
+
+        self.assertEqual(result, 0)
+        add_calls = [
+            call.args[0]
+            for call in run_command.call_args_list
+            if call.args[0][3] == "--add" and call.args[0][4] == "safe.directory"
+        ]
+        self.assertCountEqual(
+            add_calls,
+            [
+                ["git", "config", "--global", "--add", "safe.directory", str(root.resolve())],
+                ["git", "config", "--system", "--add", "safe.directory", str(root.resolve())],
+            ],
+        )
+
+    def test_add_git_safe_recursive_adds_only_child_git_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo_a = root / "repo-a"
+            repo_b = root / "nested" / "repo-b"
+            repo_a.mkdir(parents=True)
+            repo_b.mkdir(parents=True)
+            (repo_a / ".git").mkdir()
+            (repo_b / ".git").write_text("gitdir: ../.git/modules/repo-b\n", encoding="utf-8")
+
+            args = cli.build_parser().parse_args(["add-git-safe", str(root), "-r"])
+            existing_stdout = f"{root.resolve()}\n"
+            completed_existing = subprocess.CompletedProcess(
+                ["git", "config", "--global", "--get-all", "safe.directory"],
+                0,
+                stdout=existing_stdout,
+            )
+            completed_existing_system = subprocess.CompletedProcess(
+                ["git", "config", "--system", "--get-all", "safe.directory"],
+                0,
+                stdout=existing_stdout,
+            )
+            completed_ok = subprocess.CompletedProcess(
+                ["git", "config", "--global", "--add", "safe.directory", ""],
+                0,
+                stdout="",
+            )
+
+            with mock.patch.object(
+                cli,
+                "run_command",
+                side_effect=[
+                    completed_existing,
+                    completed_existing_system,
+                    completed_ok,
+                    completed_ok,
+                ],
+            ) as run_command:
+                with mock.patch("builtins.print"):
+                    result = args.handler(args)
+
+        self.assertEqual(result, 0)
+        add_calls = [
+            call.args[0]
+            for call in run_command.call_args_list
+            if call.args[0][4] == "safe.directory" and call.args[0][3] == "--add"
+        ]
+        self.assertCountEqual(
+            add_calls,
+            [
+                ["git", "config", "--global", "--add", "safe.directory", str(repo_a.resolve())],
+                ["git", "config", "--system", "--add", "safe.directory", str(repo_a.resolve())],
+            ],
+        )
 
 
 if __name__ == "__main__":

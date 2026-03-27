@@ -112,6 +112,16 @@ gki-builder docker-run \
   -- bash -lc 'cd "$GKI_SOURCE_ROOT" && tools/bazel help'
 ```
 
+### `add-git-safe`
+
+- Adds the input directory to both global and system `git safe.directory`.
+- With `-r`/`--recursive`, scans child directories and adds each detected Git repository directory.
+- Prints added entries and skipped already-configured entries for both scopes.
+
+```bash
+gki-builder add-git-safe /path/to/workspace -r
+```
+
 ## Important Inputs
 
 ### `--target`
@@ -137,3 +147,8 @@ gki-builder docker-run \
 - Optional output-root override.
 - Host mode defaults to `.akb/config.toml` `workspace.output_dir`.
 - `docker-run` defaults to `<workspace>/out`.
+
+### `-r` / `--recursive`
+
+- Used by `add-git-safe`.
+- Recursively scans subdirectories and adds only directories that are Git repositories.

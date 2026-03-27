@@ -165,6 +165,14 @@ gki-builder docker-run \
   -- bash -lc 'cd "$GKI_SOURCE_ROOT" && tools/bazel help'
 ```
 
+Add directories to global Git safe.directory:
+
+```bash
+gki-builder add-git-safe /path/to/workspace -r
+```
+
+This command updates both global and system `safe.directory` scopes.
+
 ## Docker Behavior
 
 - Docker runtime paths are fixed in code; they are no longer configured by Docker path env vars.
