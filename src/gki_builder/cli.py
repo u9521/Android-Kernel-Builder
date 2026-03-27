@@ -9,7 +9,8 @@ import os
 from pathlib import Path
 
 from .build import build_kernel, warmup_kernel
-from .docker import build_base_image, build_workspace_image, run_container
+from .docker import build_base_image, build_snapshot_image, build_workspace_image, run_container
+from .snapshot import parse_snapshot_git_projects
 from .targets import load_target_config
 from .utils import ensure_directory
 from .workspace import prepare_workspace
@@ -67,6 +68,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to workspace Dockerfile",
     )
     docker_workspace.set_defaults(handler=handle_docker_build_workspace)
+
+    docker_snapshot = subparsers.add_parser("docker-build-snapshot", help="Build the snapshot image")
+    docker_snapshot.add_argument("--tag", required=True, help="Image tag")
+    docker_snapshot.add_argument("--base-image", required=True, help="Parent image tag")
+    docker_snapshot.add_argument("--target-config", required=True, help="Path to target config")
+    docker_snapshot.add_argument(
+        "--dockerfile",
+        default="docker/snapshot.Dockerfile",
+        help="Path to snapshot Dockerfile",
+    )
+    docker_snapshot.add_argument(
+        "--snapshot-git-projects",
+        default="common",
+        help="Comma-separated repo projects to preserve as standalone Git repos in the snapshot image",
+    )
+    docker_snapshot.set_defaults(handler=handle_docker_build_snapshot)
 
     docker_run = subparsers.add_parser("docker-run", help="Run an existing image with mounted workspace")
     docker_run.add_argument("--image", required=True, help="Image tag")
@@ -177,6 +194,19 @@ def handle_docker_build_workspace(args: argparse.Namespace) -> int:
         Path(args.target_config),
         repo_root,
         repo_root / args.dockerfile,
+    )
+    return 0
+
+
+def handle_docker_build_snapshot(args: argparse.Namespace) -> int:
+    repo_root = Path(__file__).resolve().parents[2]
+    build_snapshot_image(
+        args.tag,
+        args.base_image,
+        Path(args.target_config),
+        repo_root,
+        repo_root / args.dockerfile,
+        parse_snapshot_git_projects(args.snapshot_git_projects),
     )
     return 0
 

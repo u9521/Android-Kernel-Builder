@@ -85,6 +85,11 @@ This document describes the common files and paths that appear in the base and w
 - Metadata written after `gki-builder warmup-build` when a `warmup_target` is used.
 - Records the warmup target and the exported file list copied under the chosen output root.
 
+### `${GKI_WORKSPACE_ROOT}/.gki-builder/<target>/snapshot.json`
+
+- Metadata written by the `snapshot` variant of `docker-build-workspace`.
+- Records which repo projects were preserved as standalone Git repositories after `.repo` metadata was removed.
+
 ## Downstream Files
 
 The workspace image does not reserve a fixed path for downstream patch repositories, but the recommended pattern is to mount them under a subdirectory of `${GKI_WORKSPACE_ROOT}`.

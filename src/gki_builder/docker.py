@@ -48,6 +48,35 @@ def build_workspace_image(
     )
 
 
+def build_snapshot_image(
+    tag: str,
+    base_image: str,
+    target_config: Path,
+    repo_root: Path,
+    dockerfile: Path,
+    snapshot_git_projects: list[str] | None = None,
+) -> None:
+    projects = snapshot_git_projects or ["common"]
+    run_command(
+        [
+            "docker",
+            "build",
+            "-f",
+            str(dockerfile),
+            "--build-arg",
+            f"BASE_IMAGE={base_image}",
+            "--build-arg",
+            f"TARGET_CONFIG={target_config.as_posix()}",
+            "--build-arg",
+            f"SNAPSHOT_GIT_PROJECTS={','.join(projects)}",
+            "-t",
+            tag,
+            ".",
+        ],
+        cwd=repo_root,
+    )
+
+
 def run_container(
     image: str,
     workspace_root: Path,

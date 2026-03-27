@@ -128,6 +128,15 @@ gki-builder docker-build-workspace \
   --target-config configs/targets/android15-6.6.toml
 ```
 
+Build the snapshot image when downstream consumers only need kernel source and kernel-only warmup outputs:
+
+```bash
+gki-builder docker-build-snapshot \
+  --tag ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
+  --base-image ghcr.io/<owner>/gki-base:bookworm \
+  --target-config configs/targets/android15-6.6.toml
+```
+
 During workspace image build, the Dockerfile now runs `prepare-workspace` and one `gki-builder warmup-build` pass so the published image already contains prepared source plus warmed compile caches.
 
 The warmup build mainly helps Bazel and ccache reuse previous work. If a consumer repository only changes a small patch set, especially in a limited part of the kernel tree, more cached actions can be reused and rebuilds are usually much faster. Large patch sets, broad config changes, toolchain changes, or target changes will reduce cache hit rates and the speedup will be smaller.
@@ -138,9 +147,15 @@ The bundled AVD target configs use `//common-modules/virtual-device:virtual_devi
 
 `gki-builder warmup-build` also exports the warmup target's default output files under `<output-root>/<dist_dir>` and records them in `.gki-builder/<target>/warmup-outputs.json`, so downstream kernel-only users can consume those artifacts directly.
 
-The `build-workspace-image` GitHub Actions workflow expects only the target name, for example `android15-6.6`, and resolves it from `configs/targets/<name>.toml` automatically.
+The `build-workspace-image` GitHub Actions workflow expects only the target name, for example `android15-6.6`, and resolves it from `configs/targets/<name>.toml` automatically. It publishes both `gki-workspace` and `gki-snapshot` images in one run, reusing the same runner-local BuildKit cache so the second build can avoid redoing most of the shared work without uploading huge cache layers to GitHub Actions cache storage.
+
+Both workspace and snapshot images install `gki-builder` into `/usr/local/bin` so downstream `bash -lc` workflows can still invoke the CLI even if a login shell resets `PATH`.
 
 For workspace-image environment variables and common in-image files, see `docs/environment-variables.md` and `docs/image-files.md`. Build output paths are left to downstream callers to choose explicitly.
+
+Snapshot images keep the warmed source tree, exported warmup artifacts, and cache directories needed for downstream kernel-only work, but drop `.repo` metadata. By default they preserve `common` as a standalone Git repository so downstream patching can still commit under `$GKI_SOURCE_ROOT/common` without leaving the kernel tree dirty.
+
+Because snapshot images remove `.repo`, downstream workflows should rely on Git operations in the preserved project directories instead of `repo status` or other repo-wide commands.
 
 Run a command inside the workspace image:
 

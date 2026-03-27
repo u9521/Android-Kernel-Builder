@@ -15,6 +15,24 @@ docker = importlib.import_module("gki_builder.docker")
 
 
 class DockerTests(unittest.TestCase):
+    def test_build_snapshot_image_passes_snapshot_projects(self) -> None:
+        repo_root = Path("/tmp/repo")
+        dockerfile = repo_root / "docker" / "snapshot.Dockerfile"
+
+        with mock.patch.object(docker, "run_command") as run_command:
+            docker.build_snapshot_image(
+                "example:snapshot",
+                "example:base",
+                Path("configs/targets/sample.toml"),
+                repo_root,
+                dockerfile,
+                ["common", "build/kernel"],
+            )
+
+        command = run_command.call_args.args[0]
+        self.assertIn("SNAPSHOT_GIT_PROJECTS=common,build/kernel", command)
+        self.assertIn("example:snapshot", command)
+
     def test_run_container_mounts_cache_and_output_under_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

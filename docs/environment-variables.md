@@ -55,3 +55,16 @@ The workspace image inherits `GKI_WORKSPACE_ROOT` from the base image and adds w
 
 - Generated into `GKI_ENV_FILE`
 - Mirrors the `name` field from the selected target config.
+
+### `GKI_SNAPSHOT_GIT_PROJECTS`
+
+- Used by snapshot images.
+- Comma-separated list of repo projects preserved as standalone Git repositories after snapshot pruning.
+- Default: `common`
+
+## Output Paths
+
+There is no default exported output-root environment variable.
+
+- Downstream callers should choose the build output path explicitly with `gki-builder build --output-root ...`
+- Snapshot images keep exported warmup artifacts under the output root used during image creation, usually `${GKI_WORKSPACE_ROOT}/out`

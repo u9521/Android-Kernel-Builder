@@ -16,6 +16,12 @@ Typical workspace-image flow:
 2. `docker-build-workspace`
 3. `docker-run`
 
+Typical snapshot-image flow:
+
+1. `docker-build-base`
+2. `docker-build-snapshot`
+3. `docker-run`
+
 ## Commands
 
 ### `show-target`
@@ -107,6 +113,7 @@ gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 
 - Builds a pre-warmed workspace image on top of the base image.
 - During image creation, it prepares the source tree and runs `warmup-build`.
+- Installs `gki-builder` into `/usr/local/bin` as well as the virtualenv so login-shell workflows can still find it in `PATH`.
 
 Example:
 
@@ -115,6 +122,25 @@ gki-builder docker-build-workspace \
   --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
   --base-image ghcr.io/<owner>/gki-base:bookworm \
   --target-config configs/targets/android15-6.6.toml
+```
+
+### `docker-build-snapshot`
+
+- Builds a snapshot-oriented image on top of the base image.
+- During image creation, it prepares the source tree, runs `warmup-build`, exports warmup artifacts, then removes `.repo` metadata.
+- Preserves selected repo projects as standalone Git repositories so downstream patch workflows can still commit changes.
+- Defaults to preserving `common`.
+- Snapshot images are intended for Git operations inside the preserved project directories, not for `repo` commands.
+- Installs `gki-builder` into `/usr/local/bin` as well as the virtualenv so login-shell workflows can still find it in `PATH`.
+
+Example:
+
+```bash
+gki-builder docker-build-snapshot \
+  --tag ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
+  --base-image ghcr.io/<owner>/gki-base:bookworm \
+  --target-config configs/targets/android15-6.6.toml \
+  --snapshot-git-projects common
 ```
 
 ### `docker-run`
@@ -139,6 +165,12 @@ gki-builder docker-run \
 
 - Used by `show-target`, `prepare-workspace`, `build`, `warmup-build`, and `docker-build-workspace`.
 - Points to a target file under `configs/targets/` or a custom config file.
+
+### `--snapshot-git-projects`
+
+- Used by `docker-build-snapshot`.
+- Comma-separated list of repo projects to preserve as standalone Git repositories inside the snapshot image.
+- Default: `common`
 
 ### `--workspace`
 
