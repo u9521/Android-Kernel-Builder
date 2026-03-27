@@ -31,6 +31,7 @@ class ManifestConfig:
 class BuildConfig:
     system: str = "kleaf"
     target: str = "//common:kernel_{arch}_dist"
+    warmup_target: str | None = None
     dist_dir: str = "out/gki"
     dist_flag: str = "dist_dir"
     arch: str = "aarch64"
@@ -91,6 +92,7 @@ def load_target_config(config_path: str | Path) -> TargetConfig:
     build = BuildConfig(
         system=build_payload.get("system", "kleaf"),
         target=build_payload.get("target", "//common:kernel_{arch}_dist"),
+        warmup_target=build_payload.get("warmup_target"),
         dist_dir=build_payload.get("dist_dir", "out/gki"),
         dist_flag=build_payload.get("dist_flag", "dist_dir"),
         arch=build_payload.get("arch", "aarch64"),
@@ -159,5 +161,7 @@ def validate_build(build: BuildConfig, config_path: Path) -> None:
         raise ValueError(f"Unsupported architecture in {config_path}: {build.arch}")
     if build.jobs <= 0:
         raise ValueError(f"Build jobs must be positive in {config_path}: {build.jobs}")
+    if build.system != "kleaf" and build.warmup_target:
+        raise ValueError(f"build.warmup_target is only supported for kleaf builds in {config_path}")
     if build.dist_flag not in {"dist_dir", "destdir"}:
         raise ValueError(f"Unsupported dist_flag in {config_path}: {build.dist_flag}")

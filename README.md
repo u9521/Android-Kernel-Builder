@@ -117,6 +117,8 @@ Build the base image:
 gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 ```
 
+The base image is labeled as a minimal environment for building GKI kernels. It also preconfigures Git `safe.directory` entries for `GKI_WORKSPACE_ROOT` and `GKI_WORKSPACE_ROOT/*` so repositories created or mounted under the workspace root are less likely to fail with `dubious ownership` errors.
+
 Build the workspace image:
 
 ```bash
@@ -126,24 +128,19 @@ gki-builder docker-build-workspace \
   --target-config configs/targets/android15-6.6.toml
 ```
 
-During workspace image build, the Dockerfile now runs `prepare-workspace` and one `gki-builder build` warmup pass so the published image already contains prepared source plus warmed compile caches.
+During workspace image build, the Dockerfile now runs `prepare-workspace` and one `gki-builder warmup-build` pass so the published image already contains prepared source plus warmed compile caches.
 
 The warmup build mainly helps Bazel and ccache reuse previous work. If a consumer repository only changes a small patch set, especially in a limited part of the kernel tree, more cached actions can be reused and rebuilds are usually much faster. Large patch sets, broad config changes, toolchain changes, or target changes will reduce cache hit rates and the speedup will be smaller.
 
+If `build.warmup_target` is set in a target config, workspace image warmup uses that Bazel target with `bazel build` instead of the normal distribution-producing build target. This is useful when you want image creation to compile the kernel and populate caches without also creating ramdisk or partition images.
+
+The bundled AVD target configs use `//common-modules/virtual-device:virtual_device_{arch}` as their warmup target so prewarming focuses on kernel and module compilation instead of `initramfs` and dist packaging.
+
+`gki-builder warmup-build` also exports the warmup target's default output files under `<output-root>/<dist_dir>` and records them in `.gki-builder/<target>/warmup-outputs.json`, so downstream kernel-only users can consume those artifacts directly.
+
 The `build-workspace-image` GitHub Actions workflow expects only the target name, for example `android15-6.6`, and resolves it from `configs/targets/<name>.toml` automatically.
 
-Workspace images export these key path variables:
-
-- `GKI_BUILDER_ROOT`: repository tooling root, default `/opt/gki-builder`
-- `GKI_TARGET_CONFIG`: resolved target config inside the image
-- `GKI_WORKSPACE_ROOT`: synced workspace root, default `/workspace`
-- `GKI_SOURCE_ROOT`: kernel source directory resolved from the target config
-- `GKI_CACHE_ROOT`: reusable cache root, default `/workspace/.cache`
-- `GKI_OUTPUT_ROOT`: recommended output root, default `/workspace/out`
-
-The workspace entrypoint also adds the current working directory, `GKI_WORKSPACE_ROOT`, `GKI_SOURCE_ROOT`, `GKI_BUILDER_ROOT`, and the example consumer mount path `/consumer` to Git `safe.directory` so mounted workspaces do not fail with `dubious ownership` errors.
-
-By default, the container now keeps the reusable cache under `/workspace/.cache` and writes build artifacts under `/workspace/out`, so the main working files stay grouped under `/workspace`.
+For workspace-image environment variables and common in-image files, see `docs/environment-variables.md` and `docs/image-files.md`. Build output paths are left to downstream callers to choose explicitly.
 
 Run a command inside the workspace image:
 
@@ -172,21 +169,24 @@ Because workspace images now perform one warmup build during image creation, exp
 ## Consumer CI Flow
 
 1. pull the pre-warmed workspace image
-2. apply project-specific patches inside `$GKI_SOURCE_ROOT`
+2. mount downstream patch sources under a subdirectory of `$GKI_WORKSPACE_ROOT` and apply them inside `$GKI_SOURCE_ROOT`
 3. run `gki-builder build` against the mounted workspace
-4. collect artifacts from the mounted `$GKI_OUTPUT_ROOT` such as `/workspace/out/<dist_dir>` inside the container
+4. collect artifacts from the output root you passed to `gki-builder build`
 
 See `examples/consumer-github-actions.yml` for a minimal pattern.
 
 ## Notes
 
 - This project intentionally focuses on stock kernel source preparation and build reuse.
-- Project-specific patching belongs in consumer repositories, not in the workspace image.
+- Project-specific patching belongs in consumer repositories, not in the workspace image; the example workflow mounts that repository under `$GKI_WORKSPACE_ROOT/downstream`.
 - Local manifests are first-class inputs so AVD or custom branch setups can be checked into the repo instead of discovered dynamically.
 
 ## Documentation
 
 - `docs/configuration.md`: field-by-field target config reference
+- `docs/environment-variables.md`: environment variables used and exported by the container images
+- `docs/gki-builder-cli.md`: command reference for the `gki-builder` tool
+- `docs/image-files.md`: common files and paths inside the container images
 - `docs/manifest-modes.md`: remote and local init-manifest behavior
 
 ## License

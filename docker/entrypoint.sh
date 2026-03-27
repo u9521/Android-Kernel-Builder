@@ -9,24 +9,6 @@ if [[ -n "${GKI_ENV_FILE:-}" && -f "${GKI_ENV_FILE}" ]]; then
   source "${GKI_ENV_FILE}"
 fi
 
-add_safe_directory() {
-  local dir="$1"
-  if [[ -z "$dir" || ! -d "$dir" ]]; then
-    return 0
-  fi
-  if git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir"; then
-    return 0
-  fi
-  git config --global --add safe.directory "$dir"
-}
-
-if command -v git >/dev/null 2>&1; then
-  add_safe_directory "$(pwd)"
-  add_safe_directory "${GKI_WORKSPACE_ROOT:-}"
-  add_safe_directory "${GKI_SOURCE_ROOT:-}"
-  add_safe_directory "${GKI_BUILDER_ROOT:-}"
-fi
-
 if [[ $# -eq 0 ]]; then
   exec /bin/bash
 fi

@@ -27,17 +27,19 @@ jobs:
 
       - name: Apply source patch and run incremental build
         run: |
+          DOWNSTREAM_ROOT=/workspace/downstream
           docker run --rm \
-            -v "$PWD":/consumer \
+            -e DOWNSTREAM_ROOT="$DOWNSTREAM_ROOT" \
+            -v "$PWD":"$DOWNSTREAM_ROOT" \
             -v "$PWD/.cache":/workspace/.cache \
             -v "$PWD/out":/workspace/out \
             ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
             bash -lc '
               cd "$GKI_SOURCE_ROOT" &&
-              git apply /consumer/patches/my-change.patch &&
+              git apply "$DOWNSTREAM_ROOT/patches/my-change.patch" &&
               gki-builder build \
                 --target-config "$GKI_TARGET_CONFIG" \
                 --workspace "$GKI_WORKSPACE_ROOT" \
                 --cache-root "$GKI_CACHE_ROOT" \
-                --output-root "$GKI_OUTPUT_ROOT"
+                --output-root /workspace/out
             '

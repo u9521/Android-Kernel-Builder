@@ -3,6 +3,10 @@
 
 FROM debian:bookworm-slim
 
+LABEL org.opencontainers.image.description="Minimal environment for building GKI kernels"
+
+ENV GKI_WORKSPACE_ROOT=/workspace
+
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -39,6 +43,9 @@ RUN curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/lo
     && printf 'repo version: ' \
     && repo --version
 
-WORKDIR /workspace
+RUN git config --system --add safe.directory "${GKI_WORKSPACE_ROOT}" \
+    && git config --system --add safe.directory "${GKI_WORKSPACE_ROOT}/*"
+
+WORKDIR ${GKI_WORKSPACE_ROOT}
 
 ENTRYPOINT ["/bin/bash"]

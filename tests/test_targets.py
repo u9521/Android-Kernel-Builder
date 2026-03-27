@@ -53,6 +53,32 @@ arch = "aarch64"
             self.assertTrue(target.manifest.minimal)
             self.assertFalse(target.manifest.autodetect_deprecated)
 
+    def test_loads_optional_warmup_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            config = temp_root / "target.toml"
+            config.write_text(
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+target = "//common:kernel_{arch}_dist"
+warmup_target = "//common:kernel_{arch}"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            target = load_target_config(config)
+            self.assertEqual(target.build.warmup_target, "//common:kernel_{arch}")
+
     def test_requires_explicit_build_system(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
@@ -99,6 +125,32 @@ jobs = 0
             )
 
             with self.assertRaisesRegex(ValueError, "Build jobs must be positive"):
+                load_target_config(config)
+
+    def test_rejects_warmup_target_for_legacy_builds(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            config = temp_root / "target.toml"
+            config.write_text(
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "legacy"
+arch = "aarch64"
+legacy_config = "build.config.gki"
+warmup_target = "//common:kernel_{arch}"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "build.warmup_target"):
                 load_target_config(config)
 
 

@@ -140,6 +140,17 @@ Controls how compilation runs after the workspace is ready.
   - `//common:kernel_{arch}_dist`
   - `//common-modules/virtual-device:virtual_device_{arch}_dist`
 
+### `warmup_target`
+
+- Optional Bazel target pattern used only for workspace-image warmup builds.
+- Supports `{arch}` substitution.
+- If set, `docker-build-workspace` warms caches with `bazel build <warmup_target>` instead of running the full distribution target.
+- `warmup-build` exports the warmup target's default output files to `<output-root>/<dist_dir>`.
+- Use this when the normal `target` also creates ramdisk, boot, or partition images and you want faster image creation.
+- Example:
+  - `//common:kernel_{arch}`
+- For the AVD `virtual_device_{arch}_dist` targets, prefer `//common-modules/virtual-device:virtual_device_{arch}` as the warmup target so image warmup compiles the kernel and modules without also building initramfs or dist packaging.
+
 ### `dist_dir`
 
 - Output directory relative to `--output-root`.

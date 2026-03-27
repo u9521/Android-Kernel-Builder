@@ -3,10 +3,12 @@
 # Copyright (C) 2026 u9521
 
 import importlib
+import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src").resolve()))
 
@@ -69,6 +71,82 @@ class BuildUsageTests(unittest.TestCase):
             self.assertEqual(sections["cache_ccache"]["bytes"], 17)
             self.assertEqual(sections["output"]["bytes"], 19)
             self.assertEqual(sections["workspace_metadata"]["bytes"], 7)
+
+    def test_warmup_kernel_uses_bazel_build_for_warmup_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            workspace_root = temp_root / ".workspace"
+            cache_root = temp_root / ".cache"
+            output_root = temp_root / "out"
+            source_dir = workspace_root / "android-kernel"
+            source_dir.mkdir(parents=True, exist_ok=True)
+
+            target = targets.TargetConfig(
+                name="sample",
+                manifest=targets.ManifestConfig(source="remote"),
+                build=targets.BuildConfig(
+                    system="kleaf",
+                    arch="aarch64",
+                    target="//common:kernel_{arch}_dist",
+                    warmup_target="//common:kernel_{arch}",
+                ),
+                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
+                workspace=targets.WorkspaceConfig(source_dir="android-kernel", metadata_dir=".gki-builder"),
+                config_path=Path("sample.toml"),
+            )
+
+            with mock.patch.object(build, "_warmup_kleaf") as warmup_kleaf:
+                with mock.patch.object(build, "_export_warmup_kleaf_outputs", return_value=[{"path": "out"}]):
+                    output_dir = build.warmup_kernel(target, workspace_root, cache_root, output_root)
+
+            warmup_kleaf.assert_called_once()
+            self.assertEqual(output_dir, (output_root / target.build.dist_dir).resolve())
+            metadata = json.loads(
+                (workspace_root / ".gki-builder" / "sample" / "warmup-outputs.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(metadata["warmup_target"], "//common:kernel_{arch}")
+
+    def test_warmup_kernel_falls_back_to_full_build_without_warmup_target(self) -> None:
+        target = targets.TargetConfig(
+            name="sample",
+            manifest=targets.ManifestConfig(source="remote"),
+            build=targets.BuildConfig(system="kleaf", arch="aarch64"),
+            cache=targets.CacheConfig(),
+            workspace=targets.WorkspaceConfig(),
+            config_path=Path("sample.toml"),
+        )
+
+        with mock.patch.object(build, "build_kernel") as build_kernel:
+            build.warmup_kernel(target, Path("workspace"), Path("cache"), Path("out"))
+
+        build_kernel.assert_called_once_with(target, Path("workspace"), Path("cache"), Path("out"))
+
+    def test_export_warmup_kleaf_outputs_copies_bazel_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_dir = temp_root / "source"
+            output_dir = temp_root / "out"
+            bazel_output = source_dir / "bazel-out" / "k8-fastbuild" / "bin" / "common" / "kernel_aarch64" / "vmlinux"
+            bazel_output.parent.mkdir(parents=True, exist_ok=True)
+            bazel_output.write_bytes(b"kernel")
+
+            target = targets.TargetConfig(
+                name="sample",
+                manifest=targets.ManifestConfig(source="remote"),
+                build=targets.BuildConfig(system="kleaf", arch="aarch64", warmup_target="//common:kernel_{arch}"),
+                cache=targets.CacheConfig(),
+                workspace=targets.WorkspaceConfig(),
+                config_path=Path("sample.toml"),
+            )
+
+            with mock.patch.object(build, "_query_warmup_kleaf_outputs", return_value=[
+                "bazel-out/k8-fastbuild/bin/common/kernel_aarch64/vmlinux"
+            ]):
+                exported = build._export_warmup_kleaf_outputs(target, source_dir, output_dir, {})
+
+            destination = output_dir / "common" / "kernel_aarch64" / "vmlinux"
+            self.assertEqual(destination.read_bytes(), b"kernel")
+            self.assertEqual(exported[0]["path"], str(destination.resolve()))
 
 
 if __name__ == "__main__":

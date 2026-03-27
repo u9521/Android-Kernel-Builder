@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
-import os
 import json
+import os
+import shutil
 from pathlib import Path
 
 from .targets import TargetConfig
@@ -37,6 +38,38 @@ def build_kernel(
     write_json(metadata_dir / "disk-usage.json", usage_report)
     _print_usage_report(usage_report)
 
+    return output_dir
+
+
+def warmup_kernel(
+    target: TargetConfig,
+    workspace_root: Path,
+    cache_root: Path,
+    output_root: Path,
+) -> Path:
+    if target.build.system != "kleaf" or not target.build.warmup_target:
+        return build_kernel(target, workspace_root, cache_root, output_root)
+
+    source_dir = (workspace_root / target.workspace.source_dir).resolve()
+    cache_root = cache_root.resolve()
+    output_dir = ensure_directory((output_root / target.build.dist_dir).resolve())
+    env = build_environment(target, cache_root)
+    _warmup_kleaf(target, source_dir, cache_root, env)
+    exported_files = _export_warmup_kleaf_outputs(target, source_dir, output_dir, env)
+
+    metadata_dir = ensure_directory((workspace_root / target.workspace.metadata_dir / target.name).resolve())
+    write_json(
+        metadata_dir / "warmup-outputs.json",
+        {
+            "target": target.name,
+            "warmup_target": target.build.warmup_target,
+            "output_dir": str(output_dir),
+            "files": exported_files,
+        },
+    )
+    usage_report = analyze_workspace_usage(target, workspace_root.resolve(), cache_root, output_dir)
+    write_json(metadata_dir / "disk-usage.json", usage_report)
+    _print_usage_report(usage_report)
     return output_dir
 
 
@@ -141,3 +174,98 @@ def _build_kleaf(
     command.append(target.build.target.format(arch=target.build.arch))
     command.extend(["--", f"--{target.build.dist_flag}={output_dir}"])
     run_command(command, cwd=source_dir, env=env)
+
+
+def _warmup_kleaf(
+    target: TargetConfig,
+    source_dir: Path,
+    cache_root: Path,
+    env: dict[str, str],
+) -> None:
+    warmup_target = target.build.warmup_target
+    if warmup_target is None:
+        raise ValueError("Kleaf warmup requires build.warmup_target")
+
+    bazel_cache = ensure_directory(cache_root / target.cache.bazel_dir)
+    jobs = resolve_build_jobs(target)
+    bazel_binary = source_dir / "tools/bazel"
+    if not bazel_binary.exists():
+        raise FileNotFoundError(
+            f"Missing required bazel launcher: {bazel_binary}. This project expects Kleaf trees to provide tools/bazel."
+        )
+
+    command = [
+        str(bazel_binary),
+        "build",
+        f"--disk_cache={bazel_cache}",
+        f"--jobs={jobs}",
+        "--config=fast",
+        "--config=stamp",
+        "--verbose_failures",
+    ]
+    if target.build.lto:
+        command.append(f"--lto={target.build.lto}")
+
+    command.append(warmup_target.format(arch=target.build.arch))
+    run_command(command, cwd=source_dir, env=env)
+
+
+def _export_warmup_kleaf_outputs(
+    target: TargetConfig,
+    source_dir: Path,
+    output_dir: Path,
+    env: dict[str, str],
+) -> list[dict[str, str]]:
+    files = _query_warmup_kleaf_outputs(target, source_dir, env)
+    exported_files: list[dict[str, str]] = []
+    for relative_output in files:
+        source_path = (source_dir / relative_output).resolve()
+        if not source_path.exists():
+            raise FileNotFoundError(f"Warmup output not found: {source_path}")
+
+        export_relative_path = _warmup_export_path(relative_output)
+        destination_path = (output_dir / export_relative_path).resolve()
+        ensure_directory(destination_path.parent)
+        shutil.copy2(source_path, destination_path)
+        exported_files.append(
+            {
+                "source": str(source_path),
+                "path": str(destination_path),
+            }
+        )
+
+    print(f"exported {len(exported_files)} warmup artifacts to {output_dir}", flush=True)
+    return exported_files
+
+
+def _query_warmup_kleaf_outputs(
+    target: TargetConfig,
+    source_dir: Path,
+    env: dict[str, str],
+) -> list[str]:
+    warmup_target = target.build.warmup_target
+    if warmup_target is None:
+        raise ValueError("Kleaf warmup requires build.warmup_target")
+
+    bazel_binary = source_dir / "tools/bazel"
+    result = run_command(
+        [
+            str(bazel_binary),
+            "cquery",
+            "--output=files",
+            "--config=fast",
+            "--config=stamp",
+            warmup_target.format(arch=target.build.arch),
+        ],
+        cwd=source_dir,
+        env=env,
+        capture_output=True,
+    )
+    return [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+
+
+def _warmup_export_path(relative_output: str) -> Path:
+    marker = "/bin/"
+    if marker in relative_output:
+        return Path(relative_output.split(marker, 1)[1])
+    return Path(relative_output)

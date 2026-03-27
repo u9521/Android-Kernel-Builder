@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 
-from .build import build_kernel
+from .build import build_kernel, warmup_kernel
 from .docker import build_base_image, build_workspace_image, run_container
 from .targets import load_target_config
 from .utils import ensure_directory
@@ -46,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_shared_target_arguments(build)
     build.add_argument("--output-root", default="out", help="Artifacts root directory")
     build.set_defaults(handler=handle_build)
+
+    warmup = subparsers.add_parser("warmup-build", help="Warm build caches for the configured target")
+    _add_shared_target_arguments(warmup)
+    warmup.add_argument("--output-root", default="out", help="Artifacts root directory")
+    warmup.set_defaults(handler=handle_warmup_build)
 
     docker_base = subparsers.add_parser("docker-build-base", help="Build the base image")
     docker_base.add_argument("--tag", required=True, help="Image tag")
@@ -96,6 +101,7 @@ def handle_show_target(args: argparse.Namespace) -> int:
         "build": {
             "system": target.build.system,
             "target": target.build.target,
+            "warmup_target": target.build.warmup_target,
             "dist_dir": target.build.dist_dir,
             "dist_flag": target.build.dist_flag,
             "arch": target.build.arch,
@@ -148,6 +154,12 @@ def handle_prepare_workspace(args: argparse.Namespace) -> int:
 def handle_build(args: argparse.Namespace) -> int:
     target = load_target_config(args.target_config)
     build_kernel(target, Path(args.workspace), Path(args.cache_root), Path(args.output_root))
+    return 0
+
+
+def handle_warmup_build(args: argparse.Namespace) -> int:
+    target = load_target_config(args.target_config)
+    warmup_kernel(target, Path(args.workspace), Path(args.cache_root), Path(args.output_root))
     return 0
 
 
