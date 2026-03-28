@@ -55,7 +55,7 @@ These are exported so downstream CI scripts can inspect the active image target 
 
 ### `GKI_DIST_DIR`
 
-- Target-relative distribution output directory.
+- Absolute distribution output directory under `/workspace/out` by default.
 
 ### `GKI_DIST_FLAG`
 
@@ -81,7 +81,7 @@ These are exported so downstream CI scripts can inspect the active image target 
 
 ### `GKI_MANIFEST_PATH`
 
-- Embedded local manifest path relative to `/workspace/.akb/manifests` when configured.
+- Absolute embedded local manifest path when configured.
 
 ## Other Common Image Variables
 

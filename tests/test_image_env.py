@@ -50,7 +50,7 @@ source_dir = "android-kernel"
             self.assertIn(f"export GKI_SOURCE_ROOT={workspace_root / 'android-kernel'}\n", env_text)
             self.assertIn(f"export GKI_DOCKER_METADATA_ROOT={image_dir}\n", env_text)
             self.assertIn(f"export GKI_TARGET_METADATA_ROOT={image_dir / 'targets' / 'sample'}\n", env_text)
-            self.assertIn("export GKI_DIST_DIR=sample\n", env_text)
+            self.assertIn(f"export GKI_DIST_DIR={workspace_root / 'out' / 'sample'}\n", env_text)
             self.assertIn("export GKI_BUILD_SYSTEM=\n", env_text)
             self.assertIn("export GKI_MANIFEST_SOURCE=\n", env_text)
 
@@ -97,7 +97,7 @@ source_dir = "android-kernel"
             self.assertEqual(copied_manifest.read_text(encoding="utf-8"), "<manifest />\n")
             self.assertIn('path = "sample.xml"', config_text)
             self.assertIn("export GKI_MANIFEST_SOURCE=local\n", env_text)
-            self.assertIn("export GKI_MANIFEST_PATH=sample.xml\n", env_text)
+            self.assertIn(f"export GKI_MANIFEST_PATH={workspace_root / '.akb' / 'manifests' / 'sample.xml'}\n", env_text)
 
     def test_prepare_runtime_image_layout_rejects_manifest_path_outside_search_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -48,6 +48,11 @@ def prepare_runtime_image_layout(
     )
     build_payload = cast(dict[str, object], active_target_payload.get("build") or {})
     manifest_payload = cast(dict[str, object], active_target_payload.get("manifest") or {})
+    output_root_path = layout.output_root(resolved_workspace_root)
+    dist_dir_value = str(build_payload.get("dist_dir", target_name) or target_name)
+    dist_dir_path = _absolute_path(output_root_path, dist_dir_value)
+    manifest_path_value = str(manifest_payload.get("path", "") or "")
+    manifest_path = _absolute_path(layout.embedded_manifests_root(resolved_workspace_root), manifest_path_value)
     layout.docker_env_file(runtime_root).write_text(
         f"export GKI_TARGET_NAME={target_name}\n"
         f"export GKI_SOURCE_ROOT={resolved_workspace_root / source_dir}\n"
@@ -55,13 +60,13 @@ def prepare_runtime_image_layout(
         f"export GKI_BUILD_ARCH={build_payload.get('arch', '')}\n"
         f"export GKI_BUILD_TARGET={build_payload.get('target', '')}\n"
         f"export GKI_WARMUP_TARGET={build_payload.get('warmup_target', '') or ''}\n"
-        f"export GKI_DIST_DIR={build_payload.get('dist_dir', target_name)}\n"
+        f"export GKI_DIST_DIR={dist_dir_path}\n"
         f"export GKI_DIST_FLAG={build_payload.get('dist_flag', '')}\n"
         f"export GKI_MANIFEST_SOURCE={manifest_payload.get('source', '')}\n"
         f"export GKI_MANIFEST_URL={manifest_payload.get('url', '')}\n"
         f"export GKI_MANIFEST_BRANCH={manifest_payload.get('branch', '')}\n"
         f"export GKI_MANIFEST_FILE={manifest_payload.get('file', '') or ''}\n"
-        f"export GKI_MANIFEST_PATH={manifest_payload.get('path', '') or ''}\n"
+        f"export GKI_MANIFEST_PATH={manifest_path}\n"
         f"export GKI_DOCKER_METADATA_ROOT={final_docker_metadata_dir}\n"
         f"export GKI_TARGET_METADATA_ROOT={target_metadata_dir / target_name}\n",
         encoding="utf-8",
@@ -154,6 +159,15 @@ def _resolve_source_manifest_path(config_path: Path, manifest_path_value: str) -
     raise FileNotFoundError(
         f"Local manifest file not found for Docker runtime packaging: {manifest_path_value} (search root: {search_root})"
     )
+
+
+def _absolute_path(root: Path, value: str) -> str:
+    if not value:
+        return ""
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return str(candidate)
+    return str((root / candidate).resolve())
 
 
 def _dump_toml_document(payload: dict[str, object]) -> str:
