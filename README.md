@@ -179,7 +179,7 @@ This command updates both global and system `safe.directory` scopes.
 - The entrypoint loads `/workspace/docker_metadata/gki-builder.env`.
 - That env file exports target, build, and manifest metadata for downstream CI scripts.
 - Workspace images run `gki-builder sync-source` and `gki-builder warmup-build` during image build.
-- Snapshot images additionally prune `.repo` while preserving selected Git projects.
+- Snapshot images run snapshot pruning before `gki-builder warmup-build`, preserving selected Git projects while removing `.repo` metadata.
 - The GitHub Actions publishing flow builds workspace and snapshot images in a matrix, with each image built and pushed on its own runner from the same base image and target definition.
 
 ## Notes

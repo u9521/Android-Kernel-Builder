@@ -10,7 +10,7 @@ minimal = true
 [build]
 system = "kleaf"
 target = "//common-modules/virtual-device:virtual_device_{arch}_dist"
-warmup_target = "//common-modules/virtual-device:virtual_device_{arch}"
+warmup_target = "//common:kernel_{arch}"
 dist_dir = "avd/android15-6.6-x64"
 dist_flag = "dist_dir"
 arch = "x86_64"

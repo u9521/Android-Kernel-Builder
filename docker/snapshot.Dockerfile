@@ -31,10 +31,10 @@ COPY --from=builder /tmp/gki-runtime/workspace/docker_metadata /workspace/docker
 COPY --from=builder /tmp/gki-runtime/bin/gki-workspace-entrypoint /usr/local/bin/gki-workspace-entrypoint
 
 RUN gki-builder sync-source \
-    && gki-builder warmup-build --output-root /workspace/out \
     && python3 -m gki_builder.snapshot \
         --workspace-root /workspace \
-        --snapshot-git-projects ${SNAPSHOT_GIT_PROJECTS}
+        --snapshot-git-projects ${SNAPSHOT_GIT_PROJECTS} \
+    && gki-builder warmup-build --output-root /workspace/out
 
 WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/gki-workspace-entrypoint"]
