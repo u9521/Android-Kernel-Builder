@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import tomllib
 from pathlib import Path
 from typing import cast
 
 from . import layout
+from .targets import load_target_payload_with_inheritance
 from .utils import discover_project_root
 
 
@@ -31,10 +31,12 @@ def prepare_runtime_image_layout(
     final_docker_metadata_dir = layout.docker_metadata_root(resolved_workspace_root)
     target_metadata_dir = final_docker_metadata_dir / "targets"
 
-    payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
-    workspace = payload.get("workspace") or {}
-    target_name = payload.get("name", "")
-    source_dir = workspace.get("source_dir", "android-kernel")
+    payload, _ = load_target_payload_with_inheritance(config_path)
+    workspace_payload = cast(dict[str, object], payload.get("workspace") or {})
+    target_name_value = payload.get("name", "")
+    target_name = target_name_value if isinstance(target_name_value, str) else ""
+    source_dir_value = workspace_payload.get("source_dir", "android-kernel")
+    source_dir = source_dir_value if isinstance(source_dir_value, str) and source_dir_value else "android-kernel"
 
     akb_root.mkdir(parents=True, exist_ok=True)
     docker_metadata_dir.mkdir(parents=True, exist_ok=True)
