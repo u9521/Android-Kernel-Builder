@@ -24,9 +24,6 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(layout.target_config_file(work_root, "sample"), Path("/tmp/demo/.akb/targets/configs/sample.toml"))
         self.assertEqual(layout.akb_venv_root(work_root), Path("/tmp/demo/.akb/venv"))
         self.assertEqual(layout.akb_bin_root(work_root), Path("/tmp/demo/.akb/bin"))
-        self.assertEqual(layout.host_state_root(work_root), Path("/tmp/demo/.akb/state"))
-        self.assertEqual(layout.host_target_metadata_dir(work_root), Path("/tmp/demo/.akb/state/targets"))
-        self.assertEqual(layout.host_target_metadata_root(work_root, "sample"), Path("/tmp/demo/.akb/state/targets/sample"))
         self.assertEqual(layout.cache_root(work_root), Path("/tmp/demo/.cache"))
         self.assertEqual(layout.output_root(work_root), Path("/tmp/demo/out"))
 

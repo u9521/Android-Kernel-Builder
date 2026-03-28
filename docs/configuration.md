@@ -146,7 +146,7 @@ Mode-specific constraints:
 #### `[workspace]`
 
 - `source_dir`: kernel source directory under the work root.
-- `metadata_dir`: not configurable in target files; fixed by layout constants.
+- `metadata_dir`: not configurable in target files; only Docker runtime uses fixed metadata paths.
 
 ### Target Name And File Name
 
@@ -259,6 +259,6 @@ source_dir = "android-kernel"
 
 ## Metadata Rules
 
-- host target metadata is always written under `{work}/.akb/state/targets/<target>`
-- docker target metadata is always written under `/workspace/docker_metadata/targets/<target>`
-- `workspace.metadata_dir` is fixed by layout constants and cannot be configured
+- host mode does not write target metadata files.
+- docker target metadata is always written under `/workspace/docker_metadata/targets/<target>`.
+- `workspace.metadata_dir` is fixed by layout constants and cannot be configured.

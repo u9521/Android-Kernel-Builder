@@ -86,8 +86,10 @@ def _create_build_context(
 
 def _write_usage_report(target: TargetConfig, workspace_root: Path, cache_root: Path, output_dir: Path) -> None:
     usage_report = analyze_workspace_usage(target, workspace_root, cache_root, output_dir)
-    metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
-    write_json(metadata_dir / "disk-usage.json", usage_report)
+    metadata_dir = _target_metadata_root(workspace_root, target)
+    if metadata_dir is not None:
+        metadata_root = ensure_directory(metadata_dir)
+        write_json(metadata_root / "disk-usage.json", usage_report)
     _print_usage_report(usage_report)
 
 
@@ -97,9 +99,12 @@ def _write_warmup_outputs(
     output_dir: Path,
     exported_files: list[dict[str, str]],
 ) -> None:
-    metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
+    metadata_dir = _target_metadata_root(workspace_root, target)
+    if metadata_dir is None:
+        return
+    metadata_root = ensure_directory(metadata_dir)
     write_json(
-        metadata_dir / "warmup-outputs.json",
+        metadata_root / "warmup-outputs.json",
         {
             "target": target.name,
             "warmup_target": target.build.warmup_target,
@@ -135,8 +140,9 @@ def analyze_workspace_usage(
         "cache_bazel": _usage_entry(bazel_cache_dir, directory_size_bytes(bazel_cache_dir)),
         "cache_ccache": _usage_entry(ccache_dir, directory_size_bytes(ccache_dir)),
         "output": _usage_entry(output_dir, directory_size_bytes(output_dir)),
-        "workspace_metadata": _usage_entry(metadata_dir, directory_size_bytes(metadata_dir)),
     }
+    if metadata_dir is not None:
+        sections["workspace_metadata"] = _usage_entry(metadata_dir, directory_size_bytes(metadata_dir))
     return {
         "target": target.name,
         "sections": sections,
@@ -151,11 +157,13 @@ def _usage_entry(path: Path, size_bytes: int) -> dict[str, object]:
     }
 
 
-def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path:
+def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path | None:
     metadata_dir = target.workspace.metadata_dir
+    if metadata_dir is None:
+        return None
     if metadata_dir == layout.docker_target_metadata_relative_dir():
         return layout.docker_target_metadata_root(workspace_root, target.name)
-    return layout.host_target_metadata_root(workspace_root, target.name)
+    raise ValueError(f"Unsupported workspace.metadata_dir in {target.config_path}: {metadata_dir}")
 
 
 def _print_usage_report(report: dict[str, object]) -> None:

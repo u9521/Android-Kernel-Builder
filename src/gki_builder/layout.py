@@ -21,7 +21,6 @@ AKB_BIN_DIR_NAME = "bin"
 CACHE_DIR_NAME = ".cache"
 OUTPUT_DIR_NAME = "out"
 DOCKER_METADATA_DIR_NAME = "docker_metadata"
-HOST_STATE_DIR_NAME = "state"
 TARGET_METADATA_DIR_NAME = "targets"
 
 DOCKER_WORK_ROOT = Path("/workspace")
@@ -93,28 +92,12 @@ def embedded_manifests_root(work_root: Path) -> Path:
     return akb_root(work_root) / TARGET_MANIFESTS_DIR_NAME
 
 
-def host_state_root(work_root: Path) -> Path:
-    return akb_root(work_root) / HOST_STATE_DIR_NAME
-
-
-def host_target_metadata_dir(work_root: Path) -> Path:
-    return host_state_root(work_root) / TARGET_METADATA_DIR_NAME
-
-
-def host_target_metadata_root(work_root: Path, target_name: str) -> Path:
-    return host_target_metadata_dir(work_root) / target_name
-
-
 def docker_target_metadata_dir(work_root: Path) -> Path:
     return docker_metadata_root(work_root) / TARGET_METADATA_DIR_NAME
 
 
 def docker_target_metadata_root(work_root: Path, target_name: str) -> Path:
     return docker_target_metadata_dir(work_root) / target_name
-
-
-def host_target_metadata_relative_dir() -> str:
-    return f"{AKB_DIR_NAME}/{HOST_STATE_DIR_NAME}/{TARGET_METADATA_DIR_NAME}"
 
 
 def docker_target_metadata_relative_dir() -> str:

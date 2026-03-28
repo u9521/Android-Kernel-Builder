@@ -20,7 +20,7 @@ def sync_source(
     workspace_root = workspace_root.resolve()
     cache_root = cache_root.resolve()
     source_dir = ensure_directory(workspace_root / target.workspace.source_dir)
-    metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
+    metadata_dir = _target_metadata_root(workspace_root, target)
     repo_reference_dir = ensure_directory(cache_root / target.cache.repo_dir)
     build_spec = get_build_system_spec(target.build.system)
     if build_spec is None:
@@ -53,7 +53,9 @@ def sync_source(
         "manifest_autodetect_deprecated": target.manifest.autodetect_deprecated,
         "deprecated_branch": deprecated_branch,
     }
-    write_json(metadata_dir / "workspace.json", metadata)
+    if metadata_dir is not None:
+        metadata_root = ensure_directory(metadata_dir)
+        write_json(metadata_root / "workspace.json", metadata)
     return metadata
 
 
@@ -61,11 +63,13 @@ def build_environment() -> dict[str, str]:
     return current_environment()
 
 
-def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path:
+def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path | None:
     metadata_dir = target.workspace.metadata_dir
+    if metadata_dir is None:
+        return None
     if metadata_dir == layout.docker_target_metadata_relative_dir():
         return layout.docker_target_metadata_root(workspace_root, target.name)
-    return layout.host_target_metadata_root(workspace_root, target.name)
+    raise ValueError(f"Unsupported workspace.metadata_dir in {target.config_path}: {metadata_dir}")
 
 
 def _repo_init(target: TargetConfig, source_dir: Path, repo_reference_dir: Path) -> None:

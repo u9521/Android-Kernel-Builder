@@ -50,7 +50,7 @@ class CacheConfig:
 @dataclass(slots=True)
 class WorkspaceConfig:
     source_dir: str = "android-kernel"
-    metadata_dir: str = layout.host_target_metadata_relative_dir()
+    metadata_dir: str | None = None
 
 
 @dataclass(slots=True)

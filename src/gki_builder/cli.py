@@ -137,7 +137,7 @@ def handle_show_target(args: argparse.Namespace) -> int:
         "workspace": {
             "source_dir": target.workspace.source_dir,
             "metadata_dir": target.workspace.metadata_dir,
-            "metadata_root": str(metadata_root),
+            "metadata_root": str(metadata_root) if metadata_root is not None else None,
         },
         "config_path": str(target.config_path),
     }
@@ -356,14 +356,16 @@ def _resolve_under_work_root(work_root: str | Path, value: str) -> Path:
     return Path(work_root) / path
 
 
-def _target_metadata_root_preview(target: object) -> Path:
+def _target_metadata_root_preview(target: object) -> Path | None:
     from .targets import TargetConfig
 
     assert isinstance(target, TargetConfig)
     metadata_dir = target.workspace.metadata_dir
+    if metadata_dir is None:
+        return None
     if metadata_dir == layout.docker_target_metadata_relative_dir():
         return layout.docker_target_metadata_root(layout.DOCKER_WORK_ROOT, target.name)
-    return layout.host_target_metadata_root(Path("<work>"), target.name)
+    raise ValueError(f"Unsupported workspace.metadata_dir in {target.config_path}: {metadata_dir}")
 
 
 def main() -> int:

@@ -57,7 +57,7 @@ arch = "aarch64"
 
         self.assertEqual(target.name, "sample")
         self.assertEqual(target.workspace.source_dir, "src-tree")
-        self.assertEqual(target.workspace.metadata_dir, ".akb/state/targets")
+        self.assertIsNone(target.workspace.metadata_dir)
         self.assertEqual(target.manifest.path, layout.target_manifests_root(work_root) / "default.xml")
 
     def test_resolve_target_uses_embedded_docker_target(self) -> None:

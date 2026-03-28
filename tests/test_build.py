@@ -121,7 +121,6 @@ class BuildUsageTests(unittest.TestCase):
 
             source_dir = workspace_root / "android-kernel"
             repo_dir = source_dir / ".repo"
-            metadata_dir = workspace_root / ".akb" / "state" / "targets" / "sample"
             repo_reference_dir = cache_root / "repo"
             bazel_dir = cache_root / "bazel"
             ccache_dir = cache_root / "ccache"
@@ -130,7 +129,6 @@ class BuildUsageTests(unittest.TestCase):
             for directory in [
                 source_dir,
                 repo_dir,
-                metadata_dir,
                 repo_reference_dir,
                 bazel_dir,
                 ccache_dir,
@@ -140,7 +138,6 @@ class BuildUsageTests(unittest.TestCase):
 
             (source_dir / "kernel.bin").write_bytes(b"a" * 100)
             (repo_dir / "manifest.xml").write_bytes(b"b" * 30)
-            (metadata_dir / "workspace.json").write_bytes(b"c" * 7)
             (repo_reference_dir / "ref.pack").write_bytes(b"d" * 11)
             (bazel_dir / "cache.bin").write_bytes(b"e" * 13)
             (ccache_dir / "entry.bin").write_bytes(b"f" * 17)
@@ -165,7 +162,7 @@ class BuildUsageTests(unittest.TestCase):
             self.assertEqual(sections["cache_bazel"]["bytes"], 13)
             self.assertEqual(sections["cache_ccache"]["bytes"], 17)
             self.assertEqual(sections["output"]["bytes"], 19)
-            self.assertEqual(sections["workspace_metadata"]["bytes"], 7)
+            self.assertNotIn("workspace_metadata", sections)
 
     def test_warmup_kernel_uses_bazel_build_for_warmup_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -186,7 +183,10 @@ class BuildUsageTests(unittest.TestCase):
                     warmup_target="//common:kernel_{arch}",
                 ),
                 cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
-                workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
+                workspace=targets.WorkspaceConfig(
+                    source_dir="android-kernel",
+                    metadata_dir="docker_metadata/targets",
+                ),
                 config_path=Path("sample.toml"),
             )
 
@@ -197,7 +197,7 @@ class BuildUsageTests(unittest.TestCase):
             warmup_kleaf.assert_called_once()
             self.assertEqual(output_dir, (output_root / target.build.dist_dir).resolve())
             metadata = json.loads(
-                (workspace_root / ".akb" / "state" / "targets" / "sample" / "warmup-outputs.json").read_text(encoding="utf-8")
+                (workspace_root / "docker_metadata" / "targets" / "sample" / "warmup-outputs.json").read_text(encoding="utf-8")
             )
             self.assertEqual(metadata["warmup_target"], "//common:kernel_{arch}")
 
