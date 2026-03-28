@@ -3,10 +3,12 @@
 # Copyright (C) 2026 u9521
 
 import importlib
+import io
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src").resolve()))
 
@@ -88,6 +90,141 @@ source_dir = "android-kernel"
 
         self.assertEqual(target.workspace.metadata_dir, "docker_metadata/targets")
         self.assertEqual(target.manifest.path, work_root / ".akb" / "manifests" / "avd" / "default.xml")
+
+    def test_load_host_target_falls_back_to_declared_name_search(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            layout.akb_config_file(work_root).parent.mkdir(parents=True, exist_ok=True)
+            layout.target_configs_root(work_root).mkdir(parents=True, exist_ok=True)
+            layout.target_manifests_root(work_root).mkdir(parents=True, exist_ok=True)
+            layout.akb_config_file(work_root).write_text("version = 1\n", encoding="utf-8")
+            (layout.target_manifests_root(work_root) / "default.xml").write_text("<manifest />\n", encoding="utf-8")
+            (layout.target_configs_root(work_root) / "android14.toml").write_text(
+                """
+name = "sample"
+
+[manifest]
+source = "local"
+url = "https://example.com/manifest"
+path = "default.xml"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                target = target_store.load_host_target(work_root, "sample")
+
+        self.assertEqual(target.name, "sample")
+        self.assertIn("target config mismatch", output.getvalue())
+
+    def test_filename_mismatch_warns_and_uses_declared_name_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            layout.akb_config_file(work_root).parent.mkdir(parents=True, exist_ok=True)
+            layout.target_configs_root(work_root).mkdir(parents=True, exist_ok=True)
+            layout.target_manifests_root(work_root).mkdir(parents=True, exist_ok=True)
+            layout.akb_config_file(work_root).write_text("version = 1\n", encoding="utf-8")
+            (layout.target_manifests_root(work_root) / "default.xml").write_text("<manifest />\n", encoding="utf-8")
+            (layout.target_configs_root(work_root) / "sample.toml").write_text(
+                """
+name = "wrong-name"
+
+[manifest]
+source = "local"
+url = "https://example.com/manifest"
+path = "default.xml"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (layout.target_configs_root(work_root) / "renamed.toml").write_text(
+                """
+name = "sample"
+
+[manifest]
+source = "local"
+url = "https://example.com/manifest"
+path = "default.xml"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                target = target_store.load_host_target(work_root, "sample")
+
+        self.assertEqual(target.name, "sample")
+        warning_output = output.getvalue()
+        self.assertIn("target config mismatch", warning_output)
+        self.assertIn("declared name match", warning_output)
+
+    def test_load_host_target_rejects_case_insensitive_declared_name_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            layout.akb_config_file(work_root).parent.mkdir(parents=True, exist_ok=True)
+            layout.target_configs_root(work_root).mkdir(parents=True, exist_ok=True)
+            layout.target_manifests_root(work_root).mkdir(parents=True, exist_ok=True)
+            layout.akb_config_file(work_root).write_text("version = 1\n", encoding="utf-8")
+            (layout.target_manifests_root(work_root) / "default.xml").write_text("<manifest />\n", encoding="utf-8")
+            (layout.target_configs_root(work_root) / "mixed-case.toml").write_text(
+                """
+name = "Android14-6.1"
+
+[manifest]
+source = "local"
+url = "https://example.com/manifest"
+path = "default.xml"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                with self.assertRaises(FileNotFoundError):
+                    target_store.load_host_target(work_root, "android14-6.1")
+
+        self.assertEqual(output.getvalue(), "")
+
+    def test_host_target_config_path_rejects_base_target_even_when_fields_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            layout.akb_config_file(work_root).parent.mkdir(parents=True, exist_ok=True)
+            layout.target_configs_root(work_root).mkdir(parents=True, exist_ok=True)
+            layout.akb_config_file(work_root).write_text("version = 1\n", encoding="utf-8")
+            (layout.target_configs_root(work_root) / "sample-base.toml").write_text(
+                """
+name = "sample-base"
+base = true
+
+[manifest]
+url = "https://example.com/manifest"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "base config"):
+                target_store.host_target_config_path(work_root, "sample-base")
 
 
 if __name__ == "__main__":

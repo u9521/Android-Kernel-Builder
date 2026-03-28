@@ -58,6 +58,8 @@ gki-builder build --target android15-6.6 --output-root out
 
 - Warms caches for the selected target.
 - Uses `build.warmup_target` when configured for Kleaf targets.
+- Exports warmup target output files to `<output-root>/<dist_dir>`.
+- Falls back to normal `build` behavior when warmup is not configured.
 - Writes warmup metadata under `<metadata-dir>/<target>/warmup-outputs.json`.
 
 Example:
@@ -79,6 +81,7 @@ gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 - Builds a pre-warmed one-image-one-target CI image.
 - Embeds one `active-target.toml` and only the manifest files needed by that target.
 - The final image contains a stripped runtime payload, not the full AKB repository checkout.
+- During packaging, the selected target is flattened (inheritance resolved) and written as an auto-generated `.docker-target/target.toml` with inheritance-chain comments.
 
 ```bash
 gki-builder docker-build-workspace \
@@ -91,6 +94,7 @@ gki-builder docker-build-workspace \
 
 - Builds a snapshot-oriented one-image-one-target CI image.
 - Runs warmup, then removes `.repo` metadata while preserving selected Git projects.
+- Uses the same flattened auto-generated `.docker-target/target.toml` flow as `docker-build-workspace`.
 
 ```bash
 gki-builder docker-build-snapshot \
@@ -103,6 +107,7 @@ gki-builder docker-build-snapshot \
 ### `docker-run`
 
 - Runs an existing image with host workspace, cache, and output directories mounted into `/workspace`, `/workspace/.cache`, and `/workspace/out`.
+- If no command is provided, starts `bash` in the container.
 
 ```bash
 gki-builder docker-run \
@@ -128,13 +133,20 @@ gki-builder add-git-safe /path/to/workspace -r
 
 - Used by `show-target`, `sync-source`, `build`, `warmup-build`, `docker-build-workspace`, and `docker-build-snapshot`.
 - Host mode resolves it from `.akb/targets/configs/<name>.toml`.
+- Host mode rejects targets with `base = true` (inheritance-only configs).
 - Docker runtime commands ignore it and use the embedded active target by default.
 
 ### `--snapshot-git-projects`
 
 - Used by `docker-build-snapshot`.
 - Comma-separated repo projects to preserve as standalone Git repositories.
-- Default comes from `configs/global.toml` `[snapshot].git_projects`.
+- Default: `common`.
+
+### `--workspace`
+
+- Used by `docker-run`.
+- Host directory mounted to `/workspace` in the container.
+- Default: `work`.
 
 ### `--cache-root`
 
@@ -147,6 +159,12 @@ gki-builder add-git-safe /path/to/workspace -r
 - Optional output-root override.
 - Host mode defaults to `.akb/config.toml` `workspace.output_dir`.
 - `docker-run` defaults to `<workspace>/out`.
+
+### `--jobs`
+
+- Used by `sync-source`.
+- Controls `repo sync` parallelism.
+- Default: maximum available CPU threads.
 
 ### `-r` / `--recursive`
 

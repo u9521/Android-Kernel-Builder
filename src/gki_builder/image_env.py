@@ -132,26 +132,26 @@ def _clone_mapping(value: object) -> object:
 
 def _embedded_manifest_relative_path(value: str) -> Path:
     path = Path(value)
-    if path.parts and path.parts[0] == "manifests":
-        path = Path(*path.parts[1:])
+    if not value or path.is_absolute() or any(part == ".." for part in path.parts):
+        raise ValueError(f"Invalid local manifest path '{value}': must be relative to configs/manifests")
     return path
 
 
 def _resolve_source_manifest_path(config_path: Path, manifest_path_value: str) -> Path:
-    path = Path(manifest_path_value)
-    if path.is_absolute():
-        return path.resolve()
-
+    search_root = (config_path.parent.parent / "manifests").resolve()
     embedded_manifest_path = _embedded_manifest_relative_path(manifest_path_value)
-    candidates = [
-        (discover_project_root(config_path.parent) / manifest_path_value).resolve(),
-        (config_path.parent / "manifests" / embedded_manifest_path).resolve(),
-        (config_path.parent.parent / "manifests" / embedded_manifest_path).resolve(),
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    raise FileNotFoundError(f"Local manifest file not found for Docker runtime packaging: {manifest_path_value}")
+    candidate = (search_root / embedded_manifest_path).resolve()
+    try:
+        candidate.relative_to(search_root)
+    except ValueError as error:
+        raise ValueError(
+            f"Invalid manifest.path in {config_path}: path must stay inside search root {search_root}"
+        ) from error
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError(
+        f"Local manifest file not found for Docker runtime packaging: {manifest_path_value} (search root: {search_root})"
+    )
 
 
 def _dump_toml_document(payload: dict[str, object]) -> str:

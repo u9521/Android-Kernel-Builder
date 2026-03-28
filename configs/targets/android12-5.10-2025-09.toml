@@ -1,0 +1,5 @@
+name = "android12-5.10-2025-09"
+extends = "android12-5.10"
+
+[manifest]
+branch = "common-android12-5.10-2025-09"

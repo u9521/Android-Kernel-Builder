@@ -27,6 +27,11 @@ This document describes the main fixed paths used by Docker images.
 
 ## Runtime Config Files
 
+### `/usr/local/bin/repo`
+
+- Repo launcher installed in the base image.
+- Used by `gki-builder sync-source` for `repo init` and `repo sync`.
+
 ### `/workspace/.akb/active-target.toml`
 
 - The single active target embedded into the image.
@@ -46,6 +51,11 @@ This document describes the main fixed paths used by Docker images.
 
 - Image entrypoint helper.
 - Sources `/workspace/docker_metadata/gki-builder.env` and then runs the requested command.
+
+### `/usr/local/bin/gki-builder`
+
+- CLI entry point installed in workspace and snapshot images.
+- Mirrors the virtualenv binary so login-shell workflows can still call `gki-builder`.
 
 ## Source Tree
 

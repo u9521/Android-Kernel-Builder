@@ -17,7 +17,7 @@ fi
 repo_root="${AKB_INSTALLER_REPO_ROOT:-}"
 if [[ -z "${repo_root}" && -n "${BASH_SOURCE[0]:-}" && -e "${BASH_SOURCE[0]}" ]]; then
     script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-    if [[ -d "${script_dir}/configs/targets" && -d "${script_dir}/manifests" ]]; then
+    if [[ -d "${script_dir}/configs/targets" && -d "${script_dir}/configs/manifests" ]]; then
         repo_root="${script_dir}"
     fi
 fi
@@ -171,7 +171,7 @@ def main() -> int:
     available_targets = sorted(path.stem for path in target_configs_root.glob("*.toml"))
     if repo_root is not None:
         source_targets_root = repo_root / "configs" / "targets"
-        source_manifests_root = repo_root / "manifests"
+        source_manifests_root = repo_root / "configs" / "manifests"
         if source_targets_root.is_dir():
             copied_targets, available_targets = seed_target_configs(source_targets_root, target_configs_root)
             available_targets = sorted(set(available_targets) | {path.stem for path in target_configs_root.glob("*.toml")})

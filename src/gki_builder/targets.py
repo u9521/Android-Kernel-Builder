@@ -71,60 +71,90 @@ def _parse_target_definition_file(
     default_source_dir: str = "android-kernel",
 ) -> TargetConfig:
     path = Path(config_path).resolve()
-    payload = load_mapping(path)
-    if not isinstance(payload, dict):
-        raise ValueError(f"Target config must be a mapping: {path}")
+    payload = _load_target_payload(path)
 
     project_root = discover_project_root(path.parent)
     name = payload.get("name")
-    if not name:
+    if not isinstance(name, str) or not name:
         raise ValueError(f"Missing required 'name' in {path}")
 
-    manifest_payload = payload.get("manifest") or {}
+    manifest_payload_obj = payload.get("manifest")
+    if manifest_payload_obj is None:
+        manifest_payload: dict[str, object] = {}
+    elif isinstance(manifest_payload_obj, dict):
+        manifest_payload = manifest_payload_obj
+    else:
+        raise ValueError(f"Invalid 'manifest' table in {path}: expected mapping")
     manifest = ManifestConfig(
-        source=manifest_payload.get("source", "remote"),
-        url=manifest_payload.get("url"),
-        branch=manifest_payload.get("branch"),
-        file=manifest_payload.get("file"),
+        source=_required_string(manifest_payload.get("source", "remote"), field="manifest.source", config_path=path),
+        url=_optional_string(manifest_payload.get("url"), field="manifest.url", config_path=path),
+        branch=_optional_string(manifest_payload.get("branch"), field="manifest.branch", config_path=path),
+        file=_optional_string(manifest_payload.get("file"), field="manifest.file", config_path=path),
         path=_resolve_manifest_path(
             manifest_payload.get("path"),
             manifest_root=manifest_root,
             fallback_root=project_root,
             config_path=path,
         ),
-        minimal=bool(manifest_payload.get("minimal", False)),
-        autodetect_deprecated=bool(manifest_payload.get("autodetect_deprecated", False)),
+        minimal=_required_bool(manifest_payload.get("minimal", False), field="manifest.minimal", config_path=path),
+        autodetect_deprecated=_required_bool(
+            manifest_payload.get("autodetect_deprecated", False),
+            field="manifest.autodetect_deprecated",
+            config_path=path,
+        ),
     )
     validate_manifest(manifest, path)
 
-    build_payload = payload.get("build") or {}
+    build_payload_obj = payload.get("build")
+    if build_payload_obj is None:
+        build_payload: dict[str, object] = {}
+    elif isinstance(build_payload_obj, dict):
+        build_payload = build_payload_obj
+    else:
+        raise ValueError(f"Invalid 'build' table in {path}: expected mapping")
     if "system" not in build_payload:
         raise ValueError(f"Missing required 'build.system' in {path}")
     build = BuildConfig(
-        system=build_payload.get("system", "kleaf"),
-        target=build_payload.get("target", "//common:kernel_{arch}_dist"),
-        warmup_target=build_payload.get("warmup_target"),
-        dist_dir=build_payload.get("dist_dir", "out/gki"),
-        dist_flag=build_payload.get("dist_flag", "dist_dir"),
-        arch=build_payload.get("arch", "aarch64"),
-        jobs=build_payload.get("jobs", os.cpu_count() or 1),
-        legacy_config=build_payload.get("legacy_config"),
-        lto=build_payload.get("lto", "thin"),
+        system=_required_string(build_payload.get("system", "kleaf"), field="build.system", config_path=path),
+        target=_required_string(build_payload.get("target", "//common:kernel_{arch}_dist"), field="build.target", config_path=path),
+        warmup_target=_optional_string(build_payload.get("warmup_target"), field="build.warmup_target", config_path=path),
+        dist_dir=_required_string(build_payload.get("dist_dir", "out/gki"), field="build.dist_dir", config_path=path),
+        dist_flag=_required_string(build_payload.get("dist_flag", "dist_dir"), field="build.dist_flag", config_path=path),
+        arch=_required_string(build_payload.get("arch", "aarch64"), field="build.arch", config_path=path),
+        jobs=_required_int(build_payload.get("jobs", os.cpu_count() or 1), field="build.jobs", config_path=path),
+        legacy_config=_optional_string(build_payload.get("legacy_config"), field="build.legacy_config", config_path=path),
+        lto=_optional_string(build_payload.get("lto", "thin"), field="build.lto", config_path=path),
     )
     validate_build(build, path)
 
-    cache_payload = payload.get("cache") or {}
+    cache_payload_obj = payload.get("cache")
+    if cache_payload_obj is None:
+        cache_payload: dict[str, object] = {}
+    elif isinstance(cache_payload_obj, dict):
+        cache_payload = cache_payload_obj
+    else:
+        raise ValueError(f"Invalid 'cache' table in {path}: expected mapping")
     cache = CacheConfig(
-        repo_dir=cache_payload.get("repo_dir", "repo"),
-        bazel_dir=cache_payload.get("bazel_dir", "bazel"),
-        ccache_dir=cache_payload.get("ccache_dir", "ccache"),
+        repo_dir=_required_string(cache_payload.get("repo_dir", "repo"), field="cache.repo_dir", config_path=path),
+        bazel_dir=_required_string(cache_payload.get("bazel_dir", "bazel"), field="cache.bazel_dir", config_path=path),
+        ccache_dir=_required_string(cache_payload.get("ccache_dir", "ccache"), field="cache.ccache_dir", config_path=path),
     )
 
-    workspace_payload = payload.get("workspace") or {}
+    workspace_payload_obj = payload.get("workspace")
+    if workspace_payload_obj is None:
+        workspace_payload: dict[str, object] = {}
+    elif isinstance(workspace_payload_obj, dict):
+        workspace_payload = workspace_payload_obj
+    else:
+        raise ValueError(f"Invalid 'workspace' table in {path}: expected mapping")
     if "metadata_dir" in workspace_payload:
         raise ValueError(f"workspace.metadata_dir is fixed by layout constants and cannot be configured in {path}")
     workspace = WorkspaceConfig(
-        source_dir=workspace_payload.get("source_dir", default_source_dir),
+        source_dir=_required_string(
+            workspace_payload.get("source_dir", default_source_dir),
+            field="workspace.source_dir",
+            config_path=path,
+        ),
     )
 
     return TargetConfig(
@@ -137,14 +167,114 @@ def _parse_target_definition_file(
     )
 
 
-def load_mapping(path: Path) -> dict:
+def load_mapping(path: Path) -> dict[str, object]:
+    raw_payload: object
     if path.suffix == ".toml":
-        return tomllib.loads(path.read_text(encoding="utf-8")) or {}
-    if path.suffix == ".json":
-        return json.loads(path.read_text(encoding="utf-8")) or {}
-    if path.suffix in {".yaml", ".yml"}:
+        raw_payload = tomllib.loads(path.read_text(encoding="utf-8")) or {}
+    elif path.suffix == ".json":
+        raw_payload = json.loads(path.read_text(encoding="utf-8")) or {}
+    elif path.suffix in {".yaml", ".yml"}:
         raise ModuleNotFoundError("YAML config requires PyYAML. Prefer TOML configs in this repository.")
-    raise ValueError(f"Unsupported config format: {path}")
+    else:
+        raise ValueError(f"Unsupported config format: {path}")
+
+    if not isinstance(raw_payload, dict):
+        raise ValueError(f"Target config must be a mapping: {path}")
+    return raw_payload
+
+
+def _load_target_payload(path: Path, *, stack: tuple[Path, ...] = ()) -> dict[str, object]:
+    payload, _ = _load_target_payload_with_chain(path, stack=stack)
+    return payload
+
+
+def load_target_payload_with_inheritance(config_path: str | Path) -> tuple[dict[str, object], list[Path]]:
+    return _load_target_payload_with_chain(Path(config_path).resolve())
+
+
+def _load_target_payload_with_chain(
+    path: Path,
+    *,
+    stack: tuple[Path, ...] = (),
+) -> tuple[dict[str, object], list[Path]]:
+    resolved_path = path.resolve()
+    if resolved_path in stack:
+        cycle_paths = [*stack, resolved_path]
+        cycle_text = " -> ".join(str(candidate) for candidate in cycle_paths)
+        raise ValueError(f"Circular target inheritance detected: {cycle_text}")
+
+    payload = load_mapping(resolved_path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Target config must be a mapping: {resolved_path}")
+
+    extends_value = payload.get("extends")
+    if extends_value is None:
+        return payload, [resolved_path]
+
+    parent_path = _resolve_extends_path(resolved_path, extends_value)
+    if not parent_path.exists():
+        raise FileNotFoundError(f"Parent target config not found: {parent_path}")
+
+    parent_payload, parent_chain = _load_target_payload_with_chain(parent_path, stack=(*stack, resolved_path))
+    child_payload = dict(payload)
+    child_payload.pop("extends", None)
+    return _merge_payload(parent_payload, child_payload), [*parent_chain, resolved_path]
+
+
+def _resolve_extends_path(config_path: Path, extends_value: object) -> Path:
+    if not isinstance(extends_value, str) or not extends_value.strip():
+        raise ValueError(f"Invalid extends in {config_path}: expected non-empty string")
+
+    extends_text = extends_value.strip()
+    relative_path = Path(extends_text)
+    if (
+        relative_path.is_absolute()
+        or any(part == ".." for part in relative_path.parts)
+        or len(relative_path.parts) != 1
+        or extends_text.endswith(".toml")
+    ):
+        raise ValueError(
+            f"Invalid extends in {config_path}: expected target name like 'android14-6.1'"
+        )
+
+    return (config_path.parent / f"{extends_text}.toml").resolve()
+
+
+def _merge_payload(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
+    merged: dict[str, object] = dict(base)
+    for key, value in override.items():
+        base_value = merged.get(key)
+        if isinstance(base_value, dict) and isinstance(value, dict):
+            merged[key] = _merge_payload(base_value, value)
+            continue
+        merged[key] = value
+    return merged
+
+
+def _required_string(value: object, *, field: str, config_path: Path) -> str:
+    if isinstance(value, str):
+        return value
+    raise ValueError(f"Invalid {field} in {config_path}: expected string")
+
+
+def _optional_string(value: object, *, field: str, config_path: Path) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    raise ValueError(f"Invalid {field} in {config_path}: expected string or null")
+
+
+def _required_bool(value: object, *, field: str, config_path: Path) -> bool:
+    if isinstance(value, bool):
+        return value
+    raise ValueError(f"Invalid {field} in {config_path}: expected boolean")
+
+
+def _required_int(value: object, *, field: str, config_path: Path) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise ValueError(f"Invalid {field} in {config_path}: expected integer")
 
 
 def validate_manifest(manifest: ManifestConfig, config_path: Path) -> None:

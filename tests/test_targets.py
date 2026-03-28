@@ -14,6 +14,206 @@ target_store = importlib.import_module("gki_builder.target_store")
 
 
 class TargetConfigTests(unittest.TestCase):
+    def test_base_parent_allows_missing_fields_when_inherited(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "android15-6.6-base",
+                """
+name = "android15-6.6-base"
+base = true
+
+[manifest]
+url = "https://example.com/manifest"
+
+[build]
+arch = "aarch64"
+""",
+            )
+            self._write_target(
+                work_root,
+                "android15-6.6",
+                """
+name = "android15-6.6"
+extends = "android15-6.6-base"
+
+[manifest]
+source = "remote"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+""",
+            )
+
+            target = target_store.load_host_target(work_root, "android15-6.6")
+
+        self.assertEqual(target.name, "android15-6.6")
+        self.assertEqual(target.manifest.url, "https://example.com/manifest")
+        self.assertEqual(target.manifest.branch, "common-android15-6.6")
+        self.assertEqual(target.build.system, "kleaf")
+
+    def test_rejects_base_target_as_direct_build_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "android15-6.6-base",
+                """
+name = "android15-6.6-base"
+base = true
+
+[manifest]
+url = "https://example.com/manifest"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "base config"):
+                target_store.load_host_target(work_root, "android15-6.6-base")
+
+    def test_load_target_with_extends_overrides_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "android14-6.1-base",
+                """
+name = "android14-6.1-base"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android14-6.1"
+file = "default.xml"
+minimal = true
+autodetect_deprecated = true
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+target = "//common:kernel_{arch}_dist"
+warmup_target = "//common:kernel_{arch}"
+dist_dir = "gki/android14-6.1"
+
+[cache]
+repo_dir = "repo"
+bazel_dir = "bazel"
+ccache_dir = "ccache"
+
+[workspace]
+source_dir = "android-kernel"
+""",
+            )
+            self._write_target(
+                work_root,
+                "android14-6.1-2025-03",
+                """
+name = "android14-6.1-2025-03"
+extends = "android14-6.1-base"
+
+[manifest]
+branch = "common-android14-6.1-2025-03"
+""",
+            )
+
+            target = target_store.load_host_target(work_root, "android14-6.1-2025-03")
+
+        self.assertEqual(target.name, "android14-6.1-2025-03")
+        self.assertEqual(target.manifest.url, "https://example.com/manifest")
+        self.assertEqual(target.manifest.branch, "common-android14-6.1-2025-03")
+        self.assertEqual(target.build.system, "kleaf")
+        self.assertEqual(target.build.dist_dir, "gki/android14-6.1")
+
+    def test_rejects_circular_extends(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "base",
+                """
+name = "base"
+extends = "child"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""",
+            )
+            self._write_target(
+                work_root,
+                "child",
+                """
+name = "child"
+extends = "base"
+
+[manifest]
+branch = "common-android15-6.6"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Circular target inheritance"):
+                target_store.load_host_target(work_root, "child")
+
+    def test_rejects_extends_escape_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+extends = "../outside"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid extends"):
+                target_store.load_host_target(work_root, "sample")
+
+    def test_rejects_extends_with_file_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+extends = "android14-6.1.toml"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "expected target name"):
+                target_store.load_host_target(work_root, "sample")
+
     def test_load_remote_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             work_root = Path(temp_dir)

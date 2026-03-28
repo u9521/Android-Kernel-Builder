@@ -1,0 +1,8 @@
+name = "android12-5.10"
+extends = "legacy-base"
+
+[manifest]
+branch = "common-android12-5.10"
+
+[build]
+dist_dir = "gki/android12-5.10"

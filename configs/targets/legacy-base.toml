@@ -1,0 +1,25 @@
+name = "legacy-base"
+base = true
+
+[manifest]
+source = "remote"
+url = "https://android.googlesource.com/kernel/manifest"
+file = "default.xml"
+minimal = true
+autodetect_deprecated = true
+
+[build]
+system = "legacy"
+target = "//common:kernel_{arch}_dist"
+legacy_config = "common/build.config.gki.{arch}"
+dist_flag = "dist_dir"
+arch = "aarch64"
+lto = "thin"
+
+[cache]
+repo_dir = "repo"
+bazel_dir = "bazel"
+ccache_dir = "ccache"
+
+[workspace]
+source_dir = "android-kernel"

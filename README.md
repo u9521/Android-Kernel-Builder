@@ -12,9 +12,9 @@ Current direction:
 
 - `configs/global.toml`: repository-wide snapshot-image defaults
 - `configs/targets/*.toml`: checked-in source target definitions used when building Docker images from the repo
+- `configs/manifests/**`: checked-in local manifest snapshots (see `configs/manifests/common/README.md`)
 - `docker/`: image definitions
 - `docs/`: reference docs
-- `manifests/`: checked-in source manifests
 - `src/gki_builder/`: CLI and orchestration code
 - `examples/consumer-github-actions.yml`: sample downstream CI usage
 
@@ -43,7 +43,7 @@ Initialize one from a Linux host directory:
 curl -fsSL https://raw.githubusercontent.com/u9521/Android-Kernel-Builder/refs/heads/master/install.sh | bash
 ```
 
-When run from this repository checkout, `install.sh` seeds `.akb/targets/configs` and `.akb/targets/manifests` from the checked-in `configs/targets` and `manifests` trees, creates `targets -> .akb/targets`, writes `.akb/config.toml`, and creates `.akb/bin`.
+When run from this repository checkout, `install.sh` seeds `.akb/targets/configs` and `.akb/targets/manifests` from the checked-in `configs/targets` and `configs/manifests` trees, creates `targets -> .akb/targets`, writes `.akb/config.toml`, and creates `.akb/bin`.
 
 ## Host Install
 
@@ -67,7 +67,7 @@ The script currently:
 If the installer can see this repository checkout, it also copies the checked-in host seed data:
 
 - `configs/targets/*.toml` -> `.akb/targets/configs/*.toml`
-- `manifests/**` -> `.akb/targets/manifests/**`
+- `configs/manifests/**` -> `.akb/targets/manifests/**`
 
 Supported installer environment variables:
 
@@ -179,7 +179,9 @@ This command updates both global and system `safe.directory` scopes.
 - The entrypoint loads `/workspace/docker_metadata/gki-builder.env`.
 - That env file exports target, build, and manifest metadata for downstream CI scripts.
 - Workspace images run `gki-builder sync-source` and `gki-builder warmup-build` during image build.
+- `warmup-build` exports warmup outputs to `<output-root>/<dist_dir>` when `build.warmup_target` is configured.
 - Snapshot images run snapshot pruning before `gki-builder warmup-build`, preserving selected Git projects while removing `.repo` metadata.
+- After snapshot pruning removes `.repo`, downstream flows should use Git commands inside preserved project directories instead of `repo` commands.
 - The GitHub Actions publishing flow builds workspace and snapshot images in a matrix, with each image built and pushed on its own runner from the same base image and target definition.
 
 ## Notes

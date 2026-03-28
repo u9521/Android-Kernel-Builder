@@ -141,7 +141,7 @@ def _build_legacy(
     jobs = resolve_build_jobs(target)
     env = env.copy()
     env.update({
-        "BUILD_CONFIG": legacy_config,
+        "BUILD_CONFIG": legacy_config.format(arch=target.build.arch),
         "DIST_DIR": str(output_dir),
         "CC": "ccache clang",
         "MAKEFLAGS": f"-j{jobs}",

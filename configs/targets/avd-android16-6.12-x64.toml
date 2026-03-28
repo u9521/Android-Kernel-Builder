@@ -1,25 +1,12 @@
 name = "avd-android16-6.12-x64"
+extends = "avd-base"
 
 [manifest]
-source = "local"
-url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android16-6.12"
-path = "manifests/avd/avd-android-16.1-6.12_x64.xml"
-minimal = true
+path = "avd/avd-android-16.1-6.12_x64.xml"
 
 [build]
-system = "kleaf"
-target = "//common-modules/virtual-device:virtual_device_{arch}_dist"
-warmup_target = "//common:kernel_{arch}"
 dist_dir = "avd/android16-6.12-x64"
 dist_flag = "destdir"
 arch = "x86_64"
 lto = "none"
-
-[cache]
-repo_dir = "repo"
-bazel_dir = "bazel"
-ccache_dir = "ccache"
-
-[workspace]
-source_dir = "android-kernel"

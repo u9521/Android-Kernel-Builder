@@ -59,7 +59,7 @@ source_dir = "android-kernel"
             akb_root = temp_root / "tooling"
             workspace_root = temp_root / "workspace"
             config_path = akb_root / "configs" / "targets" / "sample.toml"
-            manifest_path = akb_root / "manifests" / "sample.xml"
+            manifest_path = akb_root / "configs" / "manifests" / "sample.xml"
             akb_root.mkdir(parents=True, exist_ok=True)
             (akb_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
             config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,7 +73,7 @@ name = "sample"
 [manifest]
 source = "local"
 url = "https://android.googlesource.com/kernel/manifest"
-path = "manifests/sample.xml"
+path = "sample.xml"
 
 [workspace]
 source_dir = "android-kernel"
@@ -97,6 +97,38 @@ source_dir = "android-kernel"
             self.assertIn('path = "sample.xml"', config_text)
             self.assertIn("export GKI_MANIFEST_SOURCE=local\n", env_text)
             self.assertIn("export GKI_MANIFEST_PATH=sample.xml\n", env_text)
+
+    def test_prepare_runtime_image_layout_rejects_manifest_path_outside_search_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            akb_root = temp_root / "tooling"
+            workspace_root = temp_root / "workspace"
+            config_path = akb_root / "configs" / "targets" / "sample.toml"
+            akb_root.mkdir(parents=True, exist_ok=True)
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            workspace_root.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                """
+name = "sample"
+
+[manifest]
+source = "local"
+url = "https://android.googlesource.com/kernel/manifest"
+path = "../escape.xml"
+
+[workspace]
+source_dir = "android-kernel"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "must be relative to configs/manifests"):
+                image_env.prepare_runtime_image_layout(
+                    "configs/targets/sample.toml",
+                    workspace_root=workspace_root,
+                    project_root=akb_root,
+                )
 
 
 if __name__ == "__main__":

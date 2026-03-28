@@ -1,0 +1,9 @@
+name = "android16-6.12"
+extends = "kleaf-base"
+
+[manifest]
+branch = "common-android16-6.12"
+
+[build]
+dist_dir = "gki/android16-6.12"
+lto = "none"

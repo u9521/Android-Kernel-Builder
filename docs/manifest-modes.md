@@ -57,6 +57,7 @@ repo sync --trace -c --no-clone-bundle --no-tags ...
 
 This matches the old CI style more closely: the checked-in local XML is passed directly to `repo init -m` and acts as the active manifest entry.
 
+For checked-in targets under `configs/targets`, local `manifest.path` values are resolved under `configs/manifests`.
 In host mode, local manifest paths are resolved under `{work}/.akb/targets/manifests`.
 In Docker runtime mode, embedded local manifest paths are resolved under `/workspace/.akb/manifests`.
 

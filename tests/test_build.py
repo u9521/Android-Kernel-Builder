@@ -17,6 +17,37 @@ targets = importlib.import_module("gki_builder.targets")
 
 
 class BuildUsageTests(unittest.TestCase):
+    def test_build_kernel_formats_legacy_config_with_arch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            workspace_root = temp_root / "work"
+            cache_root = temp_root / ".cache"
+            output_root = temp_root / "out"
+            source_dir = workspace_root / "android-kernel"
+            source_dir.mkdir(parents=True, exist_ok=True)
+
+            target = targets.TargetConfig(
+                name="sample-legacy",
+                manifest=targets.ManifestConfig(source="remote"),
+                build=targets.BuildConfig(
+                    system="legacy",
+                    arch="aarch64",
+                    dist_dir="dist",
+                    legacy_config="common/build.config.gki.{arch}",
+                ),
+                cache=targets.CacheConfig(),
+                workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
+                config_path=Path("sample-legacy.toml"),
+            )
+
+            with mock.patch.object(build, "run_command") as run_command:
+                with mock.patch.object(build, "analyze_workspace_usage", return_value={"target": "sample-legacy", "sections": {}}):
+                    build.build_kernel(target, workspace_root, cache_root, output_root)
+
+            legacy_call = run_command.call_args_list[0]
+            self.assertEqual(legacy_call.args[0], ["bash", "build/build.sh"])
+            self.assertEqual(legacy_call.kwargs["env"]["BUILD_CONFIG"], "common/build.config.gki.aarch64")
+
     def test_analyze_workspace_usage_splits_source_repo_cache_and_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
