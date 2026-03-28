@@ -69,6 +69,7 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 ## Architecture Notes
 
 - Keep host and docker behavior clearly separated.
+- Do not assume the build system enum is fixed to current values; design parser/validation/branching so additional build systems can be introduced without broad rewrites.
 - Host discovery walks upward until `.akb/config.toml` is found.
 - Docker runtime always uses the fixed root `/workspace`.
 - Host targets live under `.akb/targets/configs/<name>.toml`.

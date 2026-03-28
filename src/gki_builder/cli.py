@@ -127,6 +127,7 @@ def handle_show_target(args: argparse.Namespace) -> int:
             "jobs": target.build.jobs,
             "legacy_config": target.build.legacy_config,
             "lto": target.build.lto,
+            "use_ccache": target.build.use_ccache,
         },
         "cache": {
             "repo_dir": target.cache.repo_dir,

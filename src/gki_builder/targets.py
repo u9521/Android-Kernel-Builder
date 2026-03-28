@@ -9,14 +9,12 @@ import os
 from pathlib import Path
 import tomllib
 
+from .build_systems import get_build_system_spec, supported_build_systems
 from . import layout
 from .utils import discover_project_root, resolve_path
 
 ARCHITECTURES = ("aarch64", "x86_64")
 MANIFEST_SOURCES = ("remote", "local")
-BUILD_SYSTEMS = ("kleaf", "legacy")
-
-
 @dataclass(slots=True)
 class ManifestConfig:
     source: str
@@ -39,6 +37,7 @@ class BuildConfig:
     jobs: int = os.cpu_count() or 1
     legacy_config: str | None = None
     lto: str | None = "thin"
+    use_ccache: bool = True
 
 
 @dataclass(slots=True)
@@ -114,8 +113,11 @@ def _parse_target_definition_file(
         raise ValueError(f"Invalid 'build' table in {path}: expected mapping")
     if "system" not in build_payload:
         raise ValueError(f"Missing required 'build.system' in {path}")
+    build_system = _required_string(build_payload.get("system", "kleaf"), field="build.system", config_path=path)
+    build_spec = get_build_system_spec(build_system)
+    use_ccache_default = build_spec.default_use_ccache if build_spec is not None else False
     build = BuildConfig(
-        system=_required_string(build_payload.get("system", "kleaf"), field="build.system", config_path=path),
+        system=build_system,
         target=_required_string(build_payload.get("target", "//common:kernel_{arch}_dist"), field="build.target", config_path=path),
         warmup_target=_optional_string(build_payload.get("warmup_target"), field="build.warmup_target", config_path=path),
         dist_dir=_required_string(build_payload.get("dist_dir", name), field="build.dist_dir", config_path=path),
@@ -124,6 +126,7 @@ def _parse_target_definition_file(
         jobs=_required_int(build_payload.get("jobs", os.cpu_count() or 1), field="build.jobs", config_path=path),
         legacy_config=_optional_string(build_payload.get("legacy_config"), field="build.legacy_config", config_path=path),
         lto=_optional_string(build_payload.get("lto", "thin"), field="build.lto", config_path=path),
+        use_ccache=_required_bool(build_payload.get("use_ccache", use_ccache_default), field="build.use_ccache", config_path=path),
     )
     validate_build(build, path)
 
@@ -298,16 +301,21 @@ def validate_manifest(manifest: ManifestConfig, config_path: Path) -> None:
 
 
 def validate_build(build: BuildConfig, config_path: Path) -> None:
-    if build.system not in BUILD_SYSTEMS:
+    if build.system not in supported_build_systems():
+        raise ValueError(f"Unsupported build system in {config_path}: {build.system}")
+    build_spec = get_build_system_spec(build.system)
+    if build_spec is None:
         raise ValueError(f"Unsupported build system in {config_path}: {build.system}")
     if build.arch not in ARCHITECTURES:
         raise ValueError(f"Unsupported architecture in {config_path}: {build.arch}")
     if build.jobs <= 0:
         raise ValueError(f"Build jobs must be positive in {config_path}: {build.jobs}")
-    if build.system != "kleaf" and build.warmup_target:
+    if not build_spec.supports_warmup and build.warmup_target:
         raise ValueError(f"build.warmup_target is only supported for kleaf builds in {config_path}")
     if build.dist_flag not in {"dist_dir", "destdir"}:
         raise ValueError(f"Unsupported dist_flag in {config_path}: {build.dist_flag}")
+    if not build_spec.supports_ccache and build.use_ccache:
+        raise ValueError(f"build.use_ccache=true is only supported for legacy builds in {config_path}")
 
 
 def _validate_cache_for_build(
@@ -315,10 +323,20 @@ def _validate_cache_for_build(
     build: BuildConfig,
     config_path: Path,
 ) -> None:
-    if build.system == "kleaf" and "ccache_dir" in cache_payload:
+    build_spec = get_build_system_spec(build.system)
+    if build_spec is None:
+        raise ValueError(f"Unsupported build system in {config_path}: {build.system}")
+    if not build_spec.allows_cache_ccache_dir and "ccache_dir" in cache_payload:
         raise ValueError(f"cache.ccache_dir is not supported for kleaf builds in {config_path}")
-    if build.system == "legacy" and "bazel_dir" in cache_payload:
+    if not build_spec.allows_cache_bazel_dir and "bazel_dir" in cache_payload:
         raise ValueError(f"cache.bazel_dir is not supported for legacy builds in {config_path}")
+    if build.system == "legacy" and build.use_ccache and "ccache_dir" not in cache_payload:
+        raise ValueError(f"cache.ccache_dir is required when build.use_ccache=true in {config_path}")
+    if build.system == "legacy" and not build.use_ccache and "ccache_dir" in cache_payload:
+        print(
+            f"warning: cache.ccache_dir is ignored when build.use_ccache=false in {config_path}",
+            flush=True,
+        )
 
 
 def _resolve_manifest_path(

@@ -7,13 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 import tomllib
 
+from .build_systems import get_build_system_spec, supported_build_systems
 from . import layout
 
 ARCHITECTURES = ("aarch64", "x86_64")
 MANIFEST_SOURCES = ("remote", "local")
-BUILD_SYSTEMS = ("kleaf", "legacy")
-
-
 @dataclass(slots=True)
 class ActiveManifestConfig:
     source: str
@@ -36,6 +34,7 @@ class ActiveBuildConfig:
     jobs: int = 0
     legacy_config: str | None = None
     lto: str | None = "thin"
+    use_ccache: bool = True
 
 
 @dataclass(slots=True)
@@ -84,8 +83,11 @@ def load_active_target(work_root_or_config_path: str | Path) -> ActiveTargetConf
         raise ValueError(f"Invalid [build] section in {config_path}")
     if "system" not in build_payload:
         raise ValueError(f"Missing required 'build.system' in {config_path}")
+    build_system = build_payload.get("system", "kleaf")
+    build_spec = get_build_system_spec(build_system) if isinstance(build_system, str) else None
+    use_ccache_default = build_spec.default_use_ccache if build_spec is not None else False
     build = ActiveBuildConfig(
-        system=build_payload.get("system", "kleaf"),
+        system=build_system,
         target=build_payload.get("target", "//common:kernel_{arch}_dist"),
         warmup_target=build_payload.get("warmup_target"),
         dist_dir=build_payload.get("dist_dir", name),
@@ -94,6 +96,7 @@ def load_active_target(work_root_or_config_path: str | Path) -> ActiveTargetConf
         jobs=build_payload.get("jobs", 0),
         legacy_config=build_payload.get("legacy_config"),
         lto=build_payload.get("lto", "thin"),
+        use_ccache=_required_bool(build_payload.get("use_ccache", use_ccache_default), config_path, "build.use_ccache"),
     )
     _validate_build(build, config_path)
 
@@ -148,16 +151,21 @@ def _validate_manifest(manifest: ActiveManifestConfig, config_path: Path) -> Non
 
 
 def _validate_build(build: ActiveBuildConfig, config_path: Path) -> None:
-    if build.system not in BUILD_SYSTEMS:
+    if build.system not in supported_build_systems():
+        raise ValueError(f"Unsupported build system in {config_path}: {build.system}")
+    build_spec = get_build_system_spec(build.system)
+    if build_spec is None:
         raise ValueError(f"Unsupported build system in {config_path}: {build.system}")
     if build.arch not in ARCHITECTURES:
         raise ValueError(f"Unsupported architecture in {config_path}: {build.arch}")
     if not isinstance(build.jobs, int) or build.jobs < 0:
         raise ValueError(f"Invalid build.jobs in {config_path}: expected non-negative integer")
-    if build.system != "kleaf" and build.warmup_target:
+    if not build_spec.supports_warmup and build.warmup_target:
         raise ValueError(f"build.warmup_target is only supported for kleaf builds in {config_path}")
     if build.dist_flag not in {"dist_dir", "destdir"}:
         raise ValueError(f"Unsupported dist_flag in {config_path}: {build.dist_flag}")
+    if not build_spec.supports_ccache and build.use_ccache:
+        raise ValueError(f"build.use_ccache=true is only supported for legacy builds in {config_path}")
 
 
 def _validate_manifest_relative_path(value: object, config_path: Path) -> str | None:
@@ -173,3 +181,9 @@ def _validate_relative_path_field(value: object, config_path: Path, field_name: 
     if candidate.is_absolute() or any(part == ".." for part in candidate.parts):
         raise ValueError(f"Invalid {field_name} in {config_path}: path must stay inside the embedded manifests root")
     return value
+
+
+def _required_bool(value: object, config_path: Path, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    raise ValueError(f"Invalid {field_name} in {config_path}: expected boolean")

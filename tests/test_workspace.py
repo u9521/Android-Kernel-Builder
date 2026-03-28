@@ -67,6 +67,32 @@ class WorkspaceHelpersTests(unittest.TestCase):
             self.assertFalse((cache_root / "bazel").exists())
             self.assertTrue((cache_root / "ccache").exists())
 
+    def test_sync_source_skips_ccache_dir_for_legacy_when_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            workspace_root = temp_root / "work"
+            cache_root = temp_root / ".cache"
+            workspace_root.mkdir(parents=True, exist_ok=True)
+            cache_root.mkdir(parents=True, exist_ok=True)
+
+            target = targets.TargetConfig(
+                name="sample-legacy",
+                manifest=targets.ManifestConfig(source="remote", url="https://example.com/manifest", branch="common-android12-5.10"),
+                build=targets.BuildConfig(system="legacy", legacy_config="common/build.config.gki.{arch}", use_ccache=False),
+                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
+                workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
+                config_path=Path("sample-legacy.toml"),
+            )
+
+            with mock.patch.object(workspace, "_repo_init"):
+                with mock.patch.object(workspace, "_auto_fix_remote_deprecated_branch", return_value=None):
+                    with mock.patch.object(workspace, "run_command"):
+                        workspace.sync_source(target, workspace_root, cache_root, jobs=1)
+
+            self.assertTrue((cache_root / "repo").exists())
+            self.assertFalse((cache_root / "bazel").exists())
+            self.assertFalse((cache_root / "ccache").exists())
+
     def test_detects_deprecated_branch(self) -> None:
         output = "deadbeef\trefs/heads/deprecated/android14-6.1\n"
         detected = workspace._detect_deprecated_branch(output, "android14-6.1")

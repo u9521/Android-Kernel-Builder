@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 import json
 import os
 import shutil
+import tempfile
 from pathlib import Path
 
 from . import layout
@@ -24,23 +27,12 @@ def build_kernel(
     cache_root: Path,
     output_root: Path,
 ) -> Path:
-    source_dir = (workspace_root / target.workspace.source_dir).resolve()
-    cache_root = cache_root.resolve()
-    output_dir = ensure_directory((output_root / target.build.dist_dir).resolve())
-    env = build_environment()
-
-    if target.build.system == "legacy":
-        _build_legacy(target, source_dir, cache_root, output_dir, env)
-        _print_ccache_stats(env)
-    else:
-        _build_kleaf(target, source_dir, cache_root, output_dir, env)
-
-    usage_report = analyze_workspace_usage(target, workspace_root.resolve(), cache_root, output_dir)
-    metadata_dir = ensure_directory(_target_metadata_root(workspace_root.resolve(), target))
-    write_json(metadata_dir / "disk-usage.json", usage_report)
-    _print_usage_report(usage_report)
-
-    return output_dir
+    workspace_root = workspace_root.resolve()
+    context = _create_build_context(target, workspace_root, cache_root, output_root)
+    executor = _resolve_build_system_executor(target)
+    executor.build(target, context.source_dir, context.cache_root, context.output_dir, context.env)
+    _write_usage_report(target, workspace_root, context.cache_root, context.output_dir)
+    return context.output_dir
 
 
 def warmup_kernel(
@@ -49,17 +41,63 @@ def warmup_kernel(
     cache_root: Path,
     output_root: Path,
 ) -> Path:
-    if target.build.system != "kleaf" or not target.build.warmup_target:
-        return build_kernel(target, workspace_root, cache_root, output_root)
+    workspace_root = workspace_root.resolve()
+    context = _create_build_context(target, workspace_root, cache_root, output_root)
+    executor = _resolve_build_system_executor(target)
+    exported_files = executor.warmup(target, context.source_dir, context.cache_root, context.output_dir, context.env)
 
-    source_dir = (workspace_root / target.workspace.source_dir).resolve()
-    cache_root = cache_root.resolve()
-    output_dir = ensure_directory((output_root / target.build.dist_dir).resolve())
-    env = build_environment()
-    _warmup_kleaf(target, source_dir, cache_root, env)
-    exported_files = _export_warmup_kleaf_outputs(target, source_dir, output_dir, env)
+    if exported_files is not None:
+        _write_warmup_outputs(target, workspace_root, context.output_dir, exported_files)
 
-    metadata_dir = ensure_directory(_target_metadata_root(workspace_root.resolve(), target))
+    _write_usage_report(target, workspace_root, context.cache_root, context.output_dir)
+    return context.output_dir
+
+
+BuildAction = Callable[[TargetConfig, Path, Path, Path, dict[str, str]], None]
+WarmupAction = Callable[[TargetConfig, Path, Path, Path, dict[str, str]], list[dict[str, str]] | None]
+
+
+@dataclass(slots=True)
+class _BuildContext:
+    source_dir: Path
+    cache_root: Path
+    output_dir: Path
+    env: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class _BuildSystemExecutor:
+    build: BuildAction
+    warmup: WarmupAction
+
+def _create_build_context(
+    target: TargetConfig,
+    workspace_root: Path,
+    cache_root: Path,
+    output_root: Path,
+) -> _BuildContext:
+    return _BuildContext(
+        source_dir=(workspace_root / target.workspace.source_dir).resolve(),
+        cache_root=cache_root.resolve(),
+        output_dir=ensure_directory((output_root / target.build.dist_dir).resolve()),
+        env=build_environment(),
+    )
+
+
+def _write_usage_report(target: TargetConfig, workspace_root: Path, cache_root: Path, output_dir: Path) -> None:
+    usage_report = analyze_workspace_usage(target, workspace_root, cache_root, output_dir)
+    metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
+    write_json(metadata_dir / "disk-usage.json", usage_report)
+    _print_usage_report(usage_report)
+
+
+def _write_warmup_outputs(
+    target: TargetConfig,
+    workspace_root: Path,
+    output_dir: Path,
+    exported_files: list[dict[str, str]],
+) -> None:
+    metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
     write_json(
         metadata_dir / "warmup-outputs.json",
         {
@@ -69,10 +107,6 @@ def warmup_kernel(
             "files": exported_files,
         },
     )
-    usage_report = analyze_workspace_usage(target, workspace_root.resolve(), cache_root, output_dir)
-    write_json(metadata_dir / "disk-usage.json", usage_report)
-    _print_usage_report(usage_report)
-    return output_dir
 
 
 def analyze_workspace_usage(
@@ -159,16 +193,30 @@ def _build_legacy(
     env.update({
         "BUILD_CONFIG": legacy_config.format(arch=target.build.arch),
         "DIST_DIR": str(output_dir),
-        "USE_CCACHE": "1",
-        "CCACHE_DIR": str((cache_root / target.cache.ccache_dir).resolve()),
-        "CC_WRAPPER": "ccache",
-        "CC": "ccache clang",
         "MAKEFLAGS": f"-j{jobs}",
     })
     if target.build.lto:
         env["LTO"] = target.build.lto
 
-    run_command(["bash", "build/build.sh"], cwd=source_dir, env=env)
+    if not target.build.use_ccache:
+        run_command(["bash", "build/build.sh"], cwd=source_dir, env=env)
+        return
+
+    env["CCACHE_DIR"] = str((cache_root / target.cache.ccache_dir).resolve())
+    with tempfile.TemporaryDirectory(prefix="akb-ccache-link-") as temp_dir:
+        ccache_clang = _create_ccache_clang_symlink(Path(temp_dir), env)
+        run_command(["bash", "build/build.sh", f"CC={ccache_clang}"], cwd=source_dir, env=env)
+    _print_ccache_stats(env)
+
+
+def _create_ccache_clang_symlink(directory: Path, env: dict[str, str]) -> Path:
+    ccache_binary = shutil.which("ccache", path=env.get("PATH"))
+    if ccache_binary is None:
+        raise FileNotFoundError("Legacy build requires ccache, but no ccache executable was found in PATH")
+
+    link_path = directory / "clang"
+    os.symlink(Path(ccache_binary).resolve(), link_path)
+    return link_path.absolute()
 
 
 def _build_kleaf(
@@ -201,6 +249,44 @@ def _build_kleaf(
     command.append(target.build.target.format(arch=target.build.arch))
     command.extend(["--", f"--{target.build.dist_flag}={output_dir}"])
     run_command(command, cwd=source_dir, env=env)
+
+
+def _warmup_legacy(
+    target: TargetConfig,
+    source_dir: Path,
+    cache_root: Path,
+    output_dir: Path,
+    env: dict[str, str],
+) -> list[dict[str, str]] | None:
+    _build_legacy(target, source_dir, cache_root, output_dir, env)
+    return None
+
+
+def _warmup_kleaf_mode(
+    target: TargetConfig,
+    source_dir: Path,
+    cache_root: Path,
+    output_dir: Path,
+    env: dict[str, str],
+) -> list[dict[str, str]] | None:
+    if target.build.warmup_target is None:
+        _build_kleaf(target, source_dir, cache_root, output_dir, env)
+        return None
+    _warmup_kleaf(target, source_dir, cache_root, env)
+    return _export_warmup_kleaf_outputs(target, source_dir, output_dir, env)
+
+
+_BUILD_SYSTEM_EXECUTORS = {
+    "kleaf": _BuildSystemExecutor(build=_build_kleaf, warmup=_warmup_kleaf_mode),
+    "legacy": _BuildSystemExecutor(build=_build_legacy, warmup=_warmup_legacy),
+}
+
+
+def _resolve_build_system_executor(target: TargetConfig) -> _BuildSystemExecutor:
+    executor = _BUILD_SYSTEM_EXECUTORS.get(target.build.system)
+    if executor is None:
+        raise ValueError(f"Unsupported build system in {target.config_path}: {target.build.system}")
+    return executor
 
 
 def _warmup_kleaf(
@@ -254,12 +340,10 @@ def _export_warmup_kleaf_outputs(
         destination_path = (output_dir / export_relative_path).resolve()
         ensure_directory(destination_path.parent)
         shutil.copy2(source_path, destination_path)
-        exported_files.append(
-            {
-                "source": str(source_path),
-                "path": str(destination_path),
-            }
-        )
+        exported_files.append({
+            "source": str(source_path),
+            "path": str(destination_path),
+        })
 
     print(f"exported {len(exported_files)} warmup artifacts to {output_dir}", flush=True)
     return exported_files

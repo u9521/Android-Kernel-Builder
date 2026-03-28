@@ -48,6 +48,35 @@ source_dir = "android-kernel"
         self.assertEqual(loaded.manifest.source, "remote")
         self.assertEqual(loaded.build.system, "kleaf")
         self.assertEqual(loaded.build.dist_dir, "android15-6.6")
+        self.assertFalse(loaded.build.use_ccache)
+
+    def test_load_active_target_rejects_use_ccache_for_non_legacy_builds(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "active-target.toml"
+            config_path.write_text(
+                """
+version = 1
+name = "android15-6.6"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+use_ccache = true
+
+[workspace]
+source_dir = "android-kernel"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "build.use_ccache=true"):
+                active_target.load_active_target(config_path)
 
     def test_load_active_target_with_local_manifest_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

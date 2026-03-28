@@ -118,11 +118,13 @@ Controls how compilation runs after source sync.
 - `jobs`: positive integer; when `0` or omitted in defaults, resolves to CPU count.
 - `legacy_config`: required when `system = "legacy"`; supports `{arch}` formatting.
 - `lto`: optional, typically `thin` or `none`.
+- `use_ccache`: optional boolean; defaults to `true` for legacy builds and `false` for non-legacy builds.
 
 Build constraints:
 
 - `warmup_target` is rejected for non-kleaf targets.
-- legacy builds export `BUILD_CONFIG`, `DIST_DIR`, `USE_CCACHE`, `CCACHE_DIR`, `CC_WRAPPER`, `CC`, and `MAKEFLAGS` for `build/build.sh`.
+- legacy builds export `BUILD_CONFIG`, `DIST_DIR`, and `MAKEFLAGS` for `build/build.sh`.
+- when `build.use_ccache = true`, legacy builds also set `CCACHE_DIR` and pass `CC=<absolute ccache-masqueraded clang path>`.
 - kleaf builds use the source tree `tools/bazel` launcher and pass `--<dist_flag>=<output>`.
 
 #### `[cache]`
@@ -137,6 +139,9 @@ Mode-specific constraints:
 
 - `build.system = "kleaf"`: do not define `cache.ccache_dir`.
 - `build.system = "legacy"`: do not define `cache.bazel_dir`.
+- `build.system != "legacy"`: `build.use_ccache = true` is rejected.
+- `build.system = "legacy"` and `build.use_ccache = true`: `cache.ccache_dir` must be explicitly defined (no implicit default).
+- `build.system = "legacy"` and `build.use_ccache = false`: `cache.ccache_dir` is optional and ignored when present (with warning).
 
 #### `[workspace]`
 

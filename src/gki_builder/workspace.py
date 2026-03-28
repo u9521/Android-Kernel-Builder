@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import layout
+from .build_systems import get_build_system_spec
 from .targets import TargetConfig
 from .utils import current_environment, ensure_directory, run_command, sha256_file, write_json
 
@@ -21,9 +22,12 @@ def sync_source(
     source_dir = ensure_directory(workspace_root / target.workspace.source_dir)
     metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
     repo_reference_dir = ensure_directory(cache_root / target.cache.repo_dir)
-    if target.build.system == "kleaf":
+    build_spec = get_build_system_spec(target.build.system)
+    if build_spec is None:
+        raise ValueError(f"Unsupported build system in {target.config_path}: {target.build.system}")
+    if build_spec.allows_cache_bazel_dir:
         ensure_directory(cache_root / target.cache.bazel_dir)
-    elif target.build.system == "legacy":
+    if build_spec.allows_cache_ccache_dir and target.build.use_ccache:
         ensure_directory(cache_root / target.cache.ccache_dir)
 
     _repo_init(target, source_dir, repo_reference_dir)

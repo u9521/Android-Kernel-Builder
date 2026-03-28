@@ -209,6 +209,7 @@ def _load_docker_target(work_root: Path) -> TargetConfig:
             jobs=active_target.build.jobs,
             legacy_config=active_target.build.legacy_config,
             lto=active_target.build.lto,
+            use_ccache=active_target.build.use_ccache,
         ),
         cache=CacheConfig(),
         workspace=WorkspaceConfig(

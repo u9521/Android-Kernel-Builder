@@ -2,6 +2,8 @@
 # Copyright (C) 2026 u9521
 
 import importlib
+import io
+from contextlib import redirect_stdout
 from pathlib import Path
 import sys
 import tempfile
@@ -244,6 +246,7 @@ arch = "aarch64"
         self.assertGreater(target.build.jobs, 0)
         self.assertEqual(target.build.system, "kleaf")
         self.assertEqual(target.build.dist_dir, "sample")
+        self.assertFalse(target.build.use_ccache)
 
     def test_load_local_target_with_manifest_root_relative_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -405,6 +408,31 @@ ccache_dir = "ccache"
             with self.assertRaisesRegex(ValueError, "cache.ccache_dir"):
                 target_store.load_host_target(work_root, "sample")
 
+    def test_rejects_use_ccache_for_non_legacy_builds(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+use_ccache = true
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "build.use_ccache=true"):
+                target_store.load_host_target(work_root, "sample")
+
     def test_rejects_bazel_dir_for_legacy_builds(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             work_root = Path(temp_dir)
@@ -431,6 +459,94 @@ bazel_dir = "bazel"
             )
 
             with self.assertRaisesRegex(ValueError, "cache.bazel_dir"):
+                target_store.load_host_target(work_root, "sample")
+
+    def test_warns_when_ccache_dir_is_set_but_ccache_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "legacy"
+arch = "aarch64"
+legacy_config = "common/build.config.gki.{arch}"
+use_ccache = false
+
+[cache]
+ccache_dir = "ccache"
+""",
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                target = target_store.load_host_target(work_root, "sample")
+
+        self.assertFalse(target.build.use_ccache)
+        self.assertEqual(target.cache.ccache_dir, "ccache")
+        self.assertIn("cache.ccache_dir is ignored when build.use_ccache=false", output.getvalue())
+
+    def test_allows_legacy_ccache_disabled_without_ccache_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "legacy"
+arch = "aarch64"
+legacy_config = "common/build.config.gki.{arch}"
+use_ccache = false
+""",
+            )
+
+            target = target_store.load_host_target(work_root, "sample")
+
+        self.assertFalse(target.build.use_ccache)
+        self.assertEqual(target.cache.ccache_dir, "ccache")
+
+    def test_requires_ccache_dir_when_legacy_ccache_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "legacy"
+arch = "aarch64"
+legacy_config = "common/build.config.gki.{arch}"
+use_ccache = true
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "cache.ccache_dir is required"):
                 target_store.load_host_target(work_root, "sample")
 
     def test_rejects_configurable_workspace_metadata_dir(self) -> None:
