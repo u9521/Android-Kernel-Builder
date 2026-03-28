@@ -63,8 +63,11 @@ jobs:
         run: python3 scripts/package-image.py --output-dir .image-package
 
       - name: Build and push ${{ matrix.image_name }} image
+        id: build_image
         run: |
           set -euo pipefail
+          start_ts=$(date +%s)
+          image_ref="ghcr.io/${{ github.repository_owner }}/${{ matrix.image_repo }}:${{ inputs.tag }}"
           extra_build_args=()
           if [ -n "${{ matrix.snapshot_git_projects }}" ]; then
             extra_build_args+=(--build-arg "SNAPSHOT_GIT_PROJECTS=${{ matrix.snapshot_git_projects }}")
@@ -74,7 +77,29 @@ jobs:
             --file "${{ matrix.dockerfile }}" \
             --build-arg BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm \
             --build-arg SOURCE_TARGET_FILE=${{ steps.target.outputs.source_target_file }} \
-            --tag ghcr.io/${{ github.repository_owner }}/${{ matrix.image_repo }}:${{ inputs.tag }} \
+            --tag "${image_ref}" \
             --push \
             "${extra_build_args[@]}" \
             .image-package
+
+          end_ts=$(date +%s)
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          echo "build_duration_seconds=$((end_ts - start_ts))" >> "$GITHUB_OUTPUT"
+
+      - name: Append build summary
+        if: always()
+        env:
+          IMAGE_REF: ${{ steps.build_image.outputs.image_ref }}
+          BUILD_DURATION_SECONDS: ${{ steps.build_image.outputs.build_duration_seconds }}
+          SOURCE_TARGET_FILE: ${{ steps.target.outputs.source_target_file }}
+          TARGET_INPUT: ${{ inputs.target }}
+          BUILD_STEP_OUTCOME: ${{ steps.build_image.outcome }}
+        run: |
+          set -euo pipefail
+          python3 scripts/write-ci-build-summary.py \
+            --image-ref "$IMAGE_REF" \
+            --source-target-file "$SOURCE_TARGET_FILE" \
+            --target-input "$TARGET_INPUT" \
+            --build-duration-seconds "$BUILD_DURATION_SECONDS" \
+            --build-step-outcome "$BUILD_STEP_OUTCOME" \
+            --summary-file "$GITHUB_STEP_SUMMARY"
