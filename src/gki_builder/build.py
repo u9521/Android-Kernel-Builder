@@ -27,10 +27,11 @@ def build_kernel(
     source_dir = (workspace_root / target.workspace.source_dir).resolve()
     cache_root = cache_root.resolve()
     output_dir = ensure_directory((output_root / target.build.dist_dir).resolve())
-    env = build_environment(target, cache_root)
+    env = build_environment()
 
     if target.build.system == "legacy":
-        _build_legacy(target, source_dir, output_dir, env)
+        _build_legacy(target, source_dir, cache_root, output_dir, env)
+        _print_ccache_stats(env)
     else:
         _build_kleaf(target, source_dir, cache_root, output_dir, env)
 
@@ -54,7 +55,7 @@ def warmup_kernel(
     source_dir = (workspace_root / target.workspace.source_dir).resolve()
     cache_root = cache_root.resolve()
     output_dir = ensure_directory((output_root / target.build.dist_dir).resolve())
-    env = build_environment(target, cache_root)
+    env = build_environment()
     _warmup_kleaf(target, source_dir, cache_root, env)
     exported_files = _export_warmup_kleaf_outputs(target, source_dir, output_dir, env)
 
@@ -128,9 +129,24 @@ def _print_usage_report(report: dict[str, object]) -> None:
     print(json.dumps(report, indent=2, sort_keys=True), flush=True)
 
 
+def _print_ccache_stats(env: dict[str, str]) -> None:
+    print("ccache stats:", flush=True)
+    try:
+        result = run_command(["ccache", "-s"], env=env, check=False, capture_output=True)
+    except FileNotFoundError:
+        print("(ccache not found)", flush=True)
+        return
+    output = result.stdout.strip() if isinstance(result.stdout, str) else ""
+    if output:
+        print(output, flush=True)
+        return
+    print("(no ccache output)", flush=True)
+
+
 def _build_legacy(
     target: TargetConfig,
     source_dir: Path,
+    cache_root: Path,
     output_dir: Path,
     env: dict[str, str],
 ) -> None:
@@ -143,6 +159,9 @@ def _build_legacy(
     env.update({
         "BUILD_CONFIG": legacy_config.format(arch=target.build.arch),
         "DIST_DIR": str(output_dir),
+        "USE_CCACHE": "1",
+        "CCACHE_DIR": str((cache_root / target.cache.ccache_dir).resolve()),
+        "CC_WRAPPER": "ccache",
         "CC": "ccache clang",
         "MAKEFLAGS": f"-j{jobs}",
     })

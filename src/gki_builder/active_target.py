@@ -88,7 +88,7 @@ def load_active_target(work_root_or_config_path: str | Path) -> ActiveTargetConf
         system=build_payload.get("system", "kleaf"),
         target=build_payload.get("target", "//common:kernel_{arch}_dist"),
         warmup_target=build_payload.get("warmup_target"),
-        dist_dir=build_payload.get("dist_dir", "out/gki"),
+        dist_dir=build_payload.get("dist_dir", name),
         dist_flag=build_payload.get("dist_flag", "dist_dir"),
         arch=build_payload.get("arch", "aarch64"),
         jobs=build_payload.get("jobs", 0),

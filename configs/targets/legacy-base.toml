@@ -18,7 +18,6 @@ lto = "thin"
 
 [cache]
 repo_dir = "repo"
-bazel_dir = "bazel"
 ccache_dir = "ccache"
 
 [workspace]

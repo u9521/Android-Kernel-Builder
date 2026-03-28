@@ -50,6 +50,7 @@ source_dir = "android-kernel"
             self.assertIn(f"export GKI_SOURCE_ROOT={workspace_root / 'android-kernel'}\n", env_text)
             self.assertIn(f"export GKI_DOCKER_METADATA_ROOT={image_dir}\n", env_text)
             self.assertIn(f"export GKI_TARGET_METADATA_ROOT={image_dir / 'targets' / 'sample'}\n", env_text)
+            self.assertIn("export GKI_DIST_DIR=sample\n", env_text)
             self.assertIn("export GKI_BUILD_SYSTEM=\n", env_text)
             self.assertIn("export GKI_MANIFEST_SOURCE=\n", env_text)
 

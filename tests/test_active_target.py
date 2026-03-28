@@ -47,6 +47,7 @@ source_dir = "android-kernel"
         self.assertEqual(loaded.name, "android15-6.6")
         self.assertEqual(loaded.manifest.source, "remote")
         self.assertEqual(loaded.build.system, "kleaf")
+        self.assertEqual(loaded.build.dist_dir, "android15-6.6")
 
     def test_load_active_target_with_local_manifest_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

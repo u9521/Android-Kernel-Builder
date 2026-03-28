@@ -6,5 +6,4 @@ branch = "common-android15-6.6"
 path = "avd/avd-android-15-6.6_x64.xml"
 
 [build]
-dist_dir = "avd/android15-6.6-x64"
 arch = "x86_64"

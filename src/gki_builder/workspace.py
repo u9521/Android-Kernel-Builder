@@ -21,8 +21,10 @@ def sync_source(
     source_dir = ensure_directory(workspace_root / target.workspace.source_dir)
     metadata_dir = ensure_directory(_target_metadata_root(workspace_root, target))
     repo_reference_dir = ensure_directory(cache_root / target.cache.repo_dir)
-    ensure_directory(cache_root / target.cache.bazel_dir)
-    ensure_directory(cache_root / target.cache.ccache_dir)
+    if target.build.system == "kleaf":
+        ensure_directory(cache_root / target.cache.bazel_dir)
+    elif target.build.system == "legacy":
+        ensure_directory(cache_root / target.cache.ccache_dir)
 
     _repo_init(target, source_dir, repo_reference_dir)
     deprecated_branch = _auto_fix_remote_deprecated_branch(target, source_dir)
@@ -51,11 +53,8 @@ def sync_source(
     return metadata
 
 
-def build_environment(target: TargetConfig, cache_root: Path) -> dict[str, str]:
-    return current_environment({
-        "USE_CCACHE": "1",
-        "CCACHE_DIR": str((cache_root / target.cache.ccache_dir).resolve()),
-    })
+def build_environment() -> dict[str, str]:
+    return current_environment()
 
 
 def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path:

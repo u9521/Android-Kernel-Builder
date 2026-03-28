@@ -112,7 +112,7 @@ Controls how compilation runs after source sync.
 - `system`: required; allowed values `kleaf` and `legacy`.
 - `target`: build target pattern; supports `{arch}` formatting.
 - `warmup_target`: optional warmup target pattern for kleaf only; supports `{arch}` formatting.
-- `dist_dir`: output directory relative to `--output-root`.
+- `dist_dir`: output directory relative to `--output-root`; defaults to target `name` when omitted.
 - `dist_flag`: allowed values `dist_dir` and `destdir`.
 - `arch`: allowed values `aarch64` and `x86_64`.
 - `jobs`: positive integer; when `0` or omitted in defaults, resolves to CPU count.
@@ -122,7 +122,7 @@ Controls how compilation runs after source sync.
 Build constraints:
 
 - `warmup_target` is rejected for non-kleaf targets.
-- legacy builds export `BUILD_CONFIG`, `DIST_DIR`, `CC`, and `MAKEFLAGS` for `build/build.sh`.
+- legacy builds export `BUILD_CONFIG`, `DIST_DIR`, `USE_CCACHE`, `CCACHE_DIR`, `CC_WRAPPER`, `CC`, and `MAKEFLAGS` for `build/build.sh`.
 - kleaf builds use the source tree `tools/bazel` launcher and pass `--<dist_flag>=<output>`.
 
 #### `[cache]`
@@ -132,6 +132,11 @@ Reusable subdirectories under the selected cache root.
 - `repo_dir`: repo reference cache directory.
 - `bazel_dir`: bazel disk cache directory.
 - `ccache_dir`: compiler cache directory.
+
+Mode-specific constraints:
+
+- `build.system = "kleaf"`: do not define `cache.ccache_dir`.
+- `build.system = "legacy"`: do not define `cache.bazel_dir`.
 
 #### `[workspace]`
 

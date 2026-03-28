@@ -47,6 +47,10 @@ class BuildUsageTests(unittest.TestCase):
             legacy_call = run_command.call_args_list[0]
             self.assertEqual(legacy_call.args[0], ["bash", "build/build.sh"])
             self.assertEqual(legacy_call.kwargs["env"]["BUILD_CONFIG"], "common/build.config.gki.aarch64")
+            self.assertEqual(legacy_call.kwargs["env"]["USE_CCACHE"], "1")
+            self.assertEqual(legacy_call.kwargs["env"]["CCACHE_DIR"], str((cache_root / "ccache").resolve()))
+            self.assertEqual(legacy_call.kwargs["env"]["CC_WRAPPER"], "ccache")
+            self.assertEqual(run_command.call_args_list[1].args[0], ["ccache", "-s"])
 
     def test_analyze_workspace_usage_splits_source_repo_cache_and_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

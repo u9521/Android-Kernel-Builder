@@ -54,6 +54,7 @@ system = "kleaf"
         self.assertEqual(target.manifest.url, "https://example.com/manifest")
         self.assertEqual(target.manifest.branch, "common-android15-6.6")
         self.assertEqual(target.build.system, "kleaf")
+        self.assertEqual(target.build.dist_dir, "android15-6.6")
 
     def test_rejects_base_target_as_direct_build_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -102,7 +103,6 @@ dist_dir = "gki/android14-6.1"
 [cache]
 repo_dir = "repo"
 bazel_dir = "bazel"
-ccache_dir = "ccache"
 
 [workspace]
 source_dir = "android-kernel"
@@ -243,6 +243,7 @@ arch = "aarch64"
         self.assertTrue(target.manifest.autodetect_deprecated)
         self.assertGreater(target.build.jobs, 0)
         self.assertEqual(target.build.system, "kleaf")
+        self.assertEqual(target.build.dist_dir, "sample")
 
     def test_load_local_target_with_manifest_root_relative_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -375,6 +376,61 @@ warmup_target = "//common:kernel_{arch}"
             )
 
             with self.assertRaisesRegex(ValueError, "build.warmup_target"):
+                target_store.load_host_target(work_root, "sample")
+
+    def test_rejects_ccache_dir_for_kleaf_builds(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+
+[cache]
+ccache_dir = "ccache"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "cache.ccache_dir"):
+                target_store.load_host_target(work_root, "sample")
+
+    def test_rejects_bazel_dir_for_legacy_builds(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "legacy"
+arch = "aarch64"
+legacy_config = "common/build.config.gki.{arch}"
+
+[cache]
+bazel_dir = "bazel"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "cache.bazel_dir"):
                 target_store.load_host_target(work_root, "sample")
 
     def test_rejects_configurable_workspace_metadata_dir(self) -> None:

@@ -55,7 +55,7 @@ def prepare_runtime_image_layout(
         f"export GKI_BUILD_ARCH={build_payload.get('arch', '')}\n"
         f"export GKI_BUILD_TARGET={build_payload.get('target', '')}\n"
         f"export GKI_WARMUP_TARGET={build_payload.get('warmup_target', '') or ''}\n"
-        f"export GKI_DIST_DIR={build_payload.get('dist_dir', '')}\n"
+        f"export GKI_DIST_DIR={build_payload.get('dist_dir', target_name)}\n"
         f"export GKI_DIST_FLAG={build_payload.get('dist_flag', '')}\n"
         f"export GKI_MANIFEST_SOURCE={manifest_payload.get('source', '')}\n"
         f"export GKI_MANIFEST_URL={manifest_payload.get('url', '')}\n"

@@ -118,7 +118,7 @@ def _parse_target_definition_file(
         system=_required_string(build_payload.get("system", "kleaf"), field="build.system", config_path=path),
         target=_required_string(build_payload.get("target", "//common:kernel_{arch}_dist"), field="build.target", config_path=path),
         warmup_target=_optional_string(build_payload.get("warmup_target"), field="build.warmup_target", config_path=path),
-        dist_dir=_required_string(build_payload.get("dist_dir", "out/gki"), field="build.dist_dir", config_path=path),
+        dist_dir=_required_string(build_payload.get("dist_dir", name), field="build.dist_dir", config_path=path),
         dist_flag=_required_string(build_payload.get("dist_flag", "dist_dir"), field="build.dist_flag", config_path=path),
         arch=_required_string(build_payload.get("arch", "aarch64"), field="build.arch", config_path=path),
         jobs=_required_int(build_payload.get("jobs", os.cpu_count() or 1), field="build.jobs", config_path=path),
@@ -139,6 +139,7 @@ def _parse_target_definition_file(
         bazel_dir=_required_string(cache_payload.get("bazel_dir", "bazel"), field="cache.bazel_dir", config_path=path),
         ccache_dir=_required_string(cache_payload.get("ccache_dir", "ccache"), field="cache.ccache_dir", config_path=path),
     )
+    _validate_cache_for_build(cache_payload, build, path)
 
     workspace_payload_obj = payload.get("workspace")
     if workspace_payload_obj is None:
@@ -307,6 +308,17 @@ def validate_build(build: BuildConfig, config_path: Path) -> None:
         raise ValueError(f"build.warmup_target is only supported for kleaf builds in {config_path}")
     if build.dist_flag not in {"dist_dir", "destdir"}:
         raise ValueError(f"Unsupported dist_flag in {config_path}: {build.dist_flag}")
+
+
+def _validate_cache_for_build(
+    cache_payload: dict[str, object],
+    build: BuildConfig,
+    config_path: Path,
+) -> None:
+    if build.system == "kleaf" and "ccache_dir" in cache_payload:
+        raise ValueError(f"cache.ccache_dir is not supported for kleaf builds in {config_path}")
+    if build.system == "legacy" and "bazel_dir" in cache_payload:
+        raise ValueError(f"cache.bazel_dir is not supported for legacy builds in {config_path}")
 
 
 def _resolve_manifest_path(
