@@ -70,6 +70,7 @@ class _BuildSystemExecutor:
     build: BuildAction
     warmup: WarmupAction
 
+
 def _create_build_context(
     target: TargetConfig,
     workspace_root: Path,
@@ -195,25 +196,25 @@ def _build_legacy(
     legacy_config = target.build.legacy_config
     if not legacy_config:
         raise ValueError("Legacy build requires build.legacy_config")
-
     jobs = resolve_build_jobs(target)
+    base_cmdline = ["bash", "build/build.sh", f"-j{jobs}"]
     env = env.copy()
     env.update({
         "BUILD_CONFIG": legacy_config.format(arch=target.build.arch),
         "DIST_DIR": str(output_dir),
-        "MAKEFLAGS": f"-j{jobs}",
     })
     if target.build.lto:
         env["LTO"] = target.build.lto
 
     if not target.build.use_ccache:
-        run_command(["bash", "build/build.sh"], cwd=source_dir, env=env)
+        run_command(base_cmdline, cwd=source_dir, env=env)
         return
 
     env["CCACHE_DIR"] = str((cache_root / target.cache.ccache_dir).resolve())
     with tempfile.TemporaryDirectory(prefix="akb-ccache-link-") as temp_dir:
         ccache_clang = _create_ccache_clang_symlink(Path(temp_dir), env)
-        run_command(["bash", "build/build.sh", f"CC={ccache_clang}"], cwd=source_dir, env=env)
+        base_cmdline.append(f"CC={ccache_clang}")
+        run_command(base_cmdline, cwd=source_dir, env=env)
     _print_ccache_stats(env)
 
 
