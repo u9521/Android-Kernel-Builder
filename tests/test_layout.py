@@ -26,6 +26,8 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(layout.akb_bin_root(work_root), Path("/tmp/demo/.akb/bin"))
         self.assertEqual(layout.cache_root(work_root), Path("/tmp/demo/.cache"))
         self.assertEqual(layout.output_root(work_root), Path("/tmp/demo/out"))
+        self.assertEqual(layout.ccache_tools_root(layout.cache_root(work_root)), Path("/tmp/demo/.cache/.ccache-tools"))
+        self.assertEqual(layout.ccache_clang_link(layout.cache_root(work_root)), Path("/tmp/demo/.cache/.ccache-tools/clang"))
 
     def test_docker_layout_paths_use_fixed_workspace_root(self) -> None:
         work_root = layout.DOCKER_WORK_ROOT
@@ -37,6 +39,8 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(layout.docker_target_metadata_dir(work_root), Path("/workspace/docker_metadata/targets"))
         self.assertEqual(layout.docker_target_metadata_root(work_root, "sample"), Path("/workspace/docker_metadata/targets/sample"))
         self.assertEqual(layout.docker_env_file(work_root), Path("/workspace/docker_metadata/gki-builder.env"))
+        self.assertEqual(layout.ccache_tools_root(layout.cache_root(work_root)), Path("/workspace/.cache/.ccache-tools"))
+        self.assertEqual(layout.ccache_clang_link(layout.cache_root(work_root)), Path("/workspace/.cache/.ccache-tools/clang"))
 
 
 if __name__ == "__main__":

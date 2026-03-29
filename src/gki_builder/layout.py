@@ -20,6 +20,8 @@ AKB_BIN_DIR_NAME = "bin"
 
 CACHE_DIR_NAME = ".cache"
 OUTPUT_DIR_NAME = "out"
+CCACHE_TOOLS_DIR_NAME = ".ccache-tools"
+CCACHE_CLANG_LINK_NAME = "clang"
 DOCKER_METADATA_DIR_NAME = "docker_metadata"
 TARGET_METADATA_DIR_NAME = "targets"
 
@@ -74,6 +76,14 @@ def cache_root(work_root: Path) -> Path:
 
 def output_root(work_root: Path) -> Path:
     return work_root / OUTPUT_DIR_NAME
+
+
+def ccache_tools_root(cache_root: Path) -> Path:
+    return cache_root / CCACHE_TOOLS_DIR_NAME
+
+
+def ccache_clang_link(cache_root: Path) -> Path:
+    return ccache_tools_root(cache_root) / CCACHE_CLANG_LINK_NAME
 
 
 def docker_metadata_root(work_root: Path) -> Path:

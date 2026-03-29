@@ -15,6 +15,7 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src").resolve()))
 build = importlib.import_module("gki_builder.build")
 build_systems = importlib.import_module("gki_builder.build_systems")
 targets = importlib.import_module("gki_builder.targets")
+layout = importlib.import_module("gki_builder.layout")
 
 
 class BuildUsageTests(unittest.TestCase):
@@ -56,12 +57,13 @@ class BuildUsageTests(unittest.TestCase):
                 if not isinstance(command_obj, list):
                     raise TypeError("expected command list")
                 if command_obj[0:2] == ["bash", "build/build.sh"]:
-                    cc_arg = command_obj[2]
+                    cc_arg = next(arg for arg in command_obj if arg.startswith("CC="))
                     self.assertTrue(cc_arg.startswith("CC="))
                     cc_path = Path(cc_arg.split("=", 1)[1])
                     self.assertTrue(cc_path.is_absolute())
                     self.assertTrue(cc_path.is_symlink())
                     self.assertEqual(cc_path.name, "clang")
+                    self.assertEqual(cc_path.parent, layout.ccache_tools_root(cache_root).resolve())
                     self.assertEqual(cc_path.resolve(), Path("/usr/bin/ccache"))
                 return mock.Mock(stdout="")
 
@@ -78,6 +80,20 @@ class BuildUsageTests(unittest.TestCase):
             self.assertNotIn("CC_WRAPPER", legacy_call.kwargs["env"])
             self.assertNotIn("CC", legacy_call.kwargs["env"])
             self.assertEqual(run_command.call_args_list[1].args[0], ["ccache", "-s"])
+
+    def test_create_ccache_clang_symlink_reuses_stable_cache_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_root = Path(temp_dir) / ".cache"
+            cache_root.mkdir(parents=True, exist_ok=True)
+
+            with mock.patch.object(build.shutil, "which", return_value="/usr/bin/ccache"):
+                first_link = build._create_ccache_clang_symlink(cache_root, {"PATH": "/usr/bin"})
+                second_link = build._create_ccache_clang_symlink(cache_root, {"PATH": "/usr/bin"})
+
+            self.assertEqual(first_link, second_link)
+            self.assertEqual(first_link, layout.ccache_clang_link(cache_root).absolute())
+            self.assertTrue(first_link.is_symlink())
+            self.assertEqual(first_link.resolve(), Path("/usr/bin/ccache"))
 
     def test_build_kernel_legacy_skips_ccache_when_disabled(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -109,7 +125,7 @@ class BuildUsageTests(unittest.TestCase):
 
             self.assertEqual(run_command.call_count, 1)
             legacy_call = run_command.call_args_list[0]
-            self.assertEqual(legacy_call.args[0], ["bash", "build/build.sh"])
+            self.assertEqual(legacy_call.args[0][0:2], ["bash", "build/build.sh"])
             self.assertNotIn("CCACHE_DIR", legacy_call.kwargs["env"])
 
     def test_analyze_workspace_usage_splits_source_repo_cache_and_output(self) -> None:

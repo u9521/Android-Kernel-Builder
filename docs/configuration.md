@@ -125,6 +125,7 @@ Build constraints:
 - `warmup_target` is rejected for non-kleaf targets.
 - legacy builds export `BUILD_CONFIG`, `DIST_DIR`, and `MAKEFLAGS` for `build/build.sh`.
 - when `build.use_ccache = true`, legacy builds also set `CCACHE_DIR` and pass `CC=<absolute ccache-masqueraded clang path>`.
+- the ccache masquerade path is fixed at `<cache_root>/.ccache-tools/clang` so the compiler path stays stable across runs and ccache can keep hitting the same cache entries.
 - kleaf builds use the source tree `tools/bazel` launcher and pass `--<dist_flag>=<output>`.
 
 #### `[cache]`

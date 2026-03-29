@@ -78,6 +78,11 @@ This document describes the main fixed paths used by Docker images.
 
 - Compiler cache.
 
+### `/workspace/.cache/.ccache-tools/clang`
+
+- Stable ccache masquerade symlink used by legacy builds.
+- Keeps the `CC` compiler path unchanged across runs so `ccache` can reuse cached results.
+
 ## Target Metadata
 
 ### `/workspace/docker_metadata/targets/<target>/workspace.json`

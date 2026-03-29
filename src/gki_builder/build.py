@@ -8,7 +8,6 @@ from dataclasses import dataclass
 import json
 import os
 import shutil
-import tempfile
 from pathlib import Path
 
 from . import layout
@@ -211,20 +210,29 @@ def _build_legacy(
         return
 
     env["CCACHE_DIR"] = str((cache_root / target.cache.ccache_dir).resolve())
-    with tempfile.TemporaryDirectory(prefix="akb-ccache-link-") as temp_dir:
-        ccache_clang = _create_ccache_clang_symlink(Path(temp_dir), env)
-        base_cmdline.append(f"CC={ccache_clang}")
-        run_command(base_cmdline, cwd=source_dir, env=env)
+    ccache_clang = _create_ccache_clang_symlink(cache_root, env)
+    base_cmdline.append(f"CC={ccache_clang}")
+    run_command(base_cmdline, cwd=source_dir, env=env)
     _print_ccache_stats(env)
 
 
-def _create_ccache_clang_symlink(directory: Path, env: dict[str, str]) -> Path:
+def _create_ccache_clang_symlink(cache_root: Path, env: dict[str, str]) -> Path:
     ccache_binary = shutil.which("ccache", path=env.get("PATH"))
     if ccache_binary is None:
         raise FileNotFoundError("Legacy build requires ccache, but no ccache executable was found in PATH")
 
-    link_path = directory / "clang"
-    os.symlink(Path(ccache_binary).resolve(), link_path)
+    ensure_directory(layout.ccache_tools_root(cache_root))
+    link_path = layout.ccache_clang_link(cache_root)
+    resolved_ccache_binary = Path(ccache_binary).resolve()
+
+    if link_path.is_symlink():
+        if link_path.resolve() == resolved_ccache_binary:
+            return link_path.absolute()
+        link_path.unlink()
+    elif link_path.exists():
+        raise FileExistsError(f"Cannot create ccache clang symlink because {link_path} already exists and is not a symlink")
+
+    os.symlink(resolved_ccache_binary, link_path)
     return link_path.absolute()
 
 
