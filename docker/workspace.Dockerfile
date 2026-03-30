@@ -29,8 +29,8 @@ COPY --from=builder /tmp/gki-runtime/workspace/docker_metadata /workspace/docker
 COPY --from=builder /tmp/gki-runtime/bin/gki-workspace-entrypoint /usr/local/bin/gki-workspace-entrypoint
 COPY .cache-host /cache-host
 
-RUN gki-builder-cache-sync prepare \
-    && gki-builder sync-source \
+RUN gki-builder sync-source \
+    && gki-builder-cache-sync prepare \
     && gki-builder warmup-build --output-root /workspace/.warmup-out \
     && gki-builder-cache-sync save \
     && rm -rf /workspace/.warmup-out

@@ -73,11 +73,18 @@ def _apply_cache_ownership(cache_root: Path, reference_path: Path) -> None:
     resolved_uid = reference_stat.st_uid
     resolved_gid = reference_stat.st_gid
     for root, dir_names, file_names in os.walk(cache_root):
-        os.chown(root, resolved_uid, resolved_gid)
+        _safe_chown(Path(root), resolved_uid, resolved_gid)
         for name in dir_names:
-            os.chown(Path(root) / name, resolved_uid, resolved_gid)
+            _safe_chown(Path(root) / name, resolved_uid, resolved_gid)
         for name in file_names:
-            os.chown(Path(root) / name, resolved_uid, resolved_gid)
+            _safe_chown(Path(root) / name, resolved_uid, resolved_gid)
+
+
+def _safe_chown(path: Path, uid: int, gid: int) -> None:
+    try:
+        os.chown(path, uid, gid)
+    except FileNotFoundError:
+        return
 
 
 def _format_bytes(total_bytes: int) -> str:

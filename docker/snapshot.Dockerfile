@@ -32,8 +32,8 @@ COPY --from=builder /tmp/gki-runtime/workspace/docker_metadata /workspace/docker
 COPY --from=builder /tmp/gki-runtime/bin/gki-workspace-entrypoint /usr/local/bin/gki-workspace-entrypoint
 COPY .cache-host /cache-host
 
-RUN gki-builder-cache-sync prepare \
-    && gki-builder sync-source \
+RUN gki-builder sync-source \
+    && gki-builder-cache-sync prepare \
     && python3 -m gki_builder.snapshot \
         --workspace-root /workspace \
         --snapshot-git-projects ${SNAPSHOT_GIT_PROJECTS} \

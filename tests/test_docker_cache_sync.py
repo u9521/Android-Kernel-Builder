@@ -101,6 +101,28 @@ class DockerCacheSyncTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "requires CAP_CHOWN"):
                     docker_cache_sync.prepare_cache(runtime_cache, host_cache)
 
+    def test_prepare_cache_tolerates_disappearing_entries_during_chown(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            runtime_cache = temp_root / "workspace" / ".cache"
+            host_cache = temp_root / "host-cache"
+            runtime_cache.mkdir(parents=True, exist_ok=True)
+            transient_file = host_cache / "kleaf" / "entry"
+            transient_file.parent.mkdir(parents=True, exist_ok=True)
+            transient_file.write_text("repo\n", encoding="utf-8")
+
+            def fake_chown(path: str | Path, uid: int, gid: int) -> None:
+                if Path(path) == transient_file:
+                    transient_file.unlink()
+                    raise FileNotFoundError(path)
+
+            with mock.patch.object(docker_cache_sync, "_has_capability", return_value=True):
+                with mock.patch.object(docker_cache_sync.os, "chown", side_effect=fake_chown):
+                    docker_cache_sync.prepare_cache(runtime_cache, host_cache)
+
+            self.assertTrue(runtime_cache.is_symlink())
+            self.assertEqual(runtime_cache.resolve(), host_cache.resolve())
+
     def test_save_cache_exports_runtime_cache_when_host_cache_was_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
