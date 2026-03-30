@@ -139,6 +139,23 @@ class DockerCacheSyncTests(unittest.TestCase):
             self.assertEqual((host_cache / "ccache" / "stats").read_text(encoding="utf-8"), "seed\n")
             self.assertEqual((host_cache / "bazel" / "artifact").read_text(encoding="utf-8"), "seed\n")
 
+    def test_save_cache_materializes_runtime_cache_when_runtime_points_to_host_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            runtime_cache = temp_root / "workspace" / ".cache"
+            host_cache = temp_root / "host-cache"
+            host_cache.mkdir(parents=True, exist_ok=True)
+            (host_cache / "ccache").mkdir(parents=True, exist_ok=True)
+            (host_cache / "ccache" / "stats").write_text("repo\n", encoding="utf-8")
+            runtime_cache.parent.mkdir(parents=True, exist_ok=True)
+            runtime_cache.symlink_to(host_cache)
+
+            docker_cache_sync.save_cache(runtime_cache, host_cache)
+
+            self.assertFalse(runtime_cache.is_symlink())
+            self.assertEqual((runtime_cache / "ccache" / "stats").read_text(encoding="utf-8"), "repo\n")
+            self.assertEqual((host_cache / "ccache" / "stats").read_text(encoding="utf-8"), "repo\n")
+
 
 if __name__ == "__main__":
     unittest.main()

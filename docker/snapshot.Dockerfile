@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir /tmp/gki-wheels/*.whl \
 COPY --from=builder /tmp/gki-runtime/workspace/.akb /workspace/.akb
 COPY --from=builder /tmp/gki-runtime/workspace/docker_metadata /workspace/docker_metadata
 COPY --from=builder /tmp/gki-runtime/bin/gki-workspace-entrypoint /usr/local/bin/gki-workspace-entrypoint
-COPY .cache-host /cache-host
+COPY --from=cache-host . /cache-host
 
 RUN gki-builder sync-source \
     && gki-builder-cache-sync prepare \
@@ -39,6 +39,7 @@ RUN gki-builder sync-source \
         --snapshot-git-projects ${SNAPSHOT_GIT_PROJECTS} \
     && gki-builder warmup-build --output-root /workspace/out \
     && gki-builder-cache-sync save \
+    && rm -rf /cache-host \
     && rm -rf /workspace/.warmup-out
 
 WORKDIR /workspace

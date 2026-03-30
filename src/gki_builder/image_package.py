@@ -24,6 +24,7 @@ PACKAGE_DIRS = (
 )
 
 DOCKER_TARGET_BUNDLE_DIR = Path(".docker-target")
+DOCKER_TARGET_MANIFEST_FILE = Path("manifest.xml")
 
 
 def package_image_context(repo_root: Path, output_dir: Path, source_target_file: Path | None = None) -> dict[str, object]:
@@ -72,24 +73,20 @@ def _package_selected_target_bundle(source_target_file: Path, output_dir: Path) 
     bundle_root = ensure_directory(output_dir / DOCKER_TARGET_BUNDLE_DIR)
     payload, inheritance_chain = load_target_payload_with_inheritance(source_target_file)
     compact_payload = _compact_target_payload(payload)
+    manifest = compact_payload.get("manifest") or {}
+    if isinstance(manifest, dict) and manifest.get("source") == "local":
+        manifest_path = manifest.get("path")
+        if isinstance(manifest_path, str) and manifest_path:
+            source_manifest = _resolve_source_manifest_path(source_target_file, manifest_path)
+            destination_manifest = bundle_root / DOCKER_TARGET_MANIFEST_FILE
+            shutil.copy2(source_manifest, destination_manifest)
+            manifest["path"] = DOCKER_TARGET_MANIFEST_FILE.as_posix()
+
     target_file = bundle_root / "target.toml"
     target_file.write_text(
         _render_generated_target_toml(source_target_file, inheritance_chain, compact_payload),
         encoding="utf-8",
     )
-
-    manifest = compact_payload.get("manifest") or {}
-    if not isinstance(manifest, dict) or manifest.get("source") != "local":
-        return bundle_root
-
-    manifest_path = manifest.get("path")
-    if not isinstance(manifest_path, str) or not manifest_path:
-        return bundle_root
-
-    source_manifest = _resolve_source_manifest_path(source_target_file, manifest_path)
-    destination_manifest = bundle_root / "manifests" / _embedded_manifest_relative_path(manifest_path)
-    ensure_directory(destination_manifest.parent)
-    shutil.copy2(source_manifest, destination_manifest)
     return bundle_root
 
 

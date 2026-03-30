@@ -82,6 +82,9 @@ gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 - Embeds one `active-target.toml` and only the manifest files needed by that target.
 - The final image contains a stripped runtime payload, not the full AKB repository checkout.
 - During packaging, the selected target is flattened (inheritance resolved) and written as an auto-generated `.docker-target/target.toml` with inheritance-chain comments.
+- `--push` switches the build to `docker buildx build --push`, so the image is pushed directly without being loaded into the local Docker image store.
+- `--runtime-cache-root` passes a restored runtime cache directory as the named BuildKit context `cache-host`, so the Dockerfile can consume it with `gki-builder-cache-sync prepare` / `save` without creating an extra packaged cache copy.
+- The image build still finishes with a real `/workspace/.cache` tree in the final image, so downstream CI can benefit from the prewarmed cache on the first run.
 
 ```bash
 gki-builder docker-build-workspace \
@@ -95,6 +98,9 @@ gki-builder docker-build-workspace \
 - Builds a snapshot-oriented one-image-one-target CI image.
 - Runs warmup, then removes `.repo` metadata while preserving selected Git projects.
 - Uses the same flattened auto-generated `.docker-target/target.toml` flow as `docker-build-workspace`.
+- `--push` switches the build to `docker buildx build --push`, so the image is pushed directly without being loaded into the local Docker image store.
+- `--runtime-cache-root` passes a restored runtime cache directory as the named BuildKit context `cache-host`, so the Dockerfile can consume it with `gki-builder-cache-sync prepare` / `save` without creating an extra packaged cache copy.
+- The image build still finishes with a real `/workspace/.cache` tree in the final image, so downstream CI can benefit from the prewarmed cache on the first run.
 
 ```bash
 gki-builder docker-build-snapshot \

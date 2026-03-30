@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     docker_base = subparsers.add_parser("docker-build-base", help="Build the base image")
     docker_base.add_argument("--tag", required=True, help="Image tag")
     docker_base.add_argument("--dockerfile", default="docker/base.Dockerfile", help="Path to base Dockerfile")
+    docker_base.add_argument("--push", action="store_true", help="Push directly with docker buildx instead of loading locally")
     docker_base.set_defaults(handler=handle_docker_build_base)
 
     docker_workspace = subparsers.add_parser("docker-build-workspace", help="Build the workspace image")
@@ -63,6 +64,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--dockerfile",
         default="docker/workspace.Dockerfile",
         help="Path to workspace Dockerfile",
+    )
+    docker_workspace.add_argument(
+        "--push",
+        action="store_true",
+        help="Push directly with docker buildx instead of loading locally",
+    )
+    docker_workspace.add_argument(
+        "--runtime-cache-root",
+        help="Optional directory copied into .cache-host in the packaged image context",
     )
     docker_workspace.set_defaults(handler=handle_docker_build_workspace)
 
@@ -79,6 +89,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--snapshot-git-projects",
         default="common",
         help="Comma-separated repo projects to preserve as standalone Git repos in the snapshot image",
+    )
+    docker_snapshot.add_argument(
+        "--push",
+        action="store_true",
+        help="Push directly with docker buildx instead of loading locally",
+    )
+    docker_snapshot.add_argument(
+        "--runtime-cache-root",
+        help="Optional directory copied into .cache-host in the packaged image context",
     )
     docker_snapshot.set_defaults(handler=handle_docker_build_snapshot)
 
@@ -186,7 +205,7 @@ def handle_warmup_build(args: argparse.Namespace) -> int:
 
 def handle_docker_build_base(args: argparse.Namespace) -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    build_base_image(args.tag, repo_root, repo_root / args.dockerfile)
+    build_base_image(args.tag, repo_root, repo_root / args.dockerfile, push=args.push)
     return 0
 
 
@@ -201,6 +220,8 @@ def handle_docker_build_workspace(args: argparse.Namespace) -> int:
         host_target_config_path(environment.work_root, args.target),
         repo_root,
         repo_root / args.dockerfile,
+        push=args.push,
+        runtime_cache_root=Path(args.runtime_cache_root).resolve() if args.runtime_cache_root else None,
     )
     return 0
 
@@ -217,6 +238,8 @@ def handle_docker_build_snapshot(args: argparse.Namespace) -> int:
         repo_root,
         repo_root / args.dockerfile,
         parse_snapshot_git_projects(args.snapshot_git_projects),
+        push=args.push,
+        runtime_cache_root=Path(args.runtime_cache_root).resolve() if args.runtime_cache_root else None,
     )
     return 0
 

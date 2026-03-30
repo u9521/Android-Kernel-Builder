@@ -18,6 +18,104 @@ environment_module = importlib.import_module("gki_builder.environment")
 
 
 class CliTests(unittest.TestCase):
+    def test_docker_build_workspace_passes_push_flag(self) -> None:
+        args = cli.build_parser().parse_args(
+            [
+                "docker-build-workspace",
+                "--tag",
+                "example:workspace",
+                "--base-image",
+                "example:base",
+                "--target",
+                "android15-6.6",
+                "--push",
+            ]
+        )
+        env = environment_module.AkbEnvironment(mode="host", work_root=Path("/tmp/workspace"))
+
+        with mock.patch.object(cli, "discover_current_environment", return_value=env):
+            with mock.patch.object(cli, "host_target_config_path", return_value=Path("/tmp/workspace/.akb/targets/configs/android15-6.6.toml")):
+                with mock.patch.object(cli, "build_workspace_image") as build_workspace_image:
+                    result = args.handler(args)
+
+        self.assertEqual(result, 0)
+        self.assertTrue(build_workspace_image.call_args.kwargs["push"])
+        self.assertIsNone(build_workspace_image.call_args.kwargs["runtime_cache_root"])
+
+    def test_docker_build_workspace_passes_runtime_cache_root(self) -> None:
+        args = cli.build_parser().parse_args(
+            [
+                "docker-build-workspace",
+                "--tag",
+                "example:workspace",
+                "--base-image",
+                "example:base",
+                "--target",
+                "android15-6.6",
+                "--runtime-cache-root",
+                "ci-cache",
+            ]
+        )
+        env = environment_module.AkbEnvironment(mode="host", work_root=Path("/tmp/workspace"))
+
+        with mock.patch.object(cli, "discover_current_environment", return_value=env):
+            with mock.patch.object(cli, "host_target_config_path", return_value=Path("/tmp/workspace/.akb/targets/configs/android15-6.6.toml")):
+                with mock.patch.object(cli, "build_workspace_image") as build_workspace_image:
+                    result = args.handler(args)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(build_workspace_image.call_args.kwargs["runtime_cache_root"], Path("ci-cache").resolve())
+
+    def test_docker_build_snapshot_passes_push_flag(self) -> None:
+        args = cli.build_parser().parse_args(
+            [
+                "docker-build-snapshot",
+                "--tag",
+                "example:snapshot",
+                "--base-image",
+                "example:base",
+                "--target",
+                "android15-6.6",
+                "--push",
+            ]
+        )
+        env = environment_module.AkbEnvironment(mode="host", work_root=Path("/tmp/workspace"))
+
+        with mock.patch.object(cli, "discover_current_environment", return_value=env):
+            with mock.patch.object(cli, "host_target_config_path", return_value=Path("/tmp/workspace/.akb/targets/configs/android15-6.6.toml")):
+                with mock.patch.object(cli, "parse_snapshot_git_projects", return_value=["common"]):
+                    with mock.patch.object(cli, "build_snapshot_image") as build_snapshot_image:
+                        result = args.handler(args)
+
+        self.assertEqual(result, 0)
+        self.assertTrue(build_snapshot_image.call_args.kwargs["push"])
+        self.assertIsNone(build_snapshot_image.call_args.kwargs["runtime_cache_root"])
+
+    def test_docker_build_snapshot_passes_runtime_cache_root(self) -> None:
+        args = cli.build_parser().parse_args(
+            [
+                "docker-build-snapshot",
+                "--tag",
+                "example:snapshot",
+                "--base-image",
+                "example:base",
+                "--target",
+                "android15-6.6",
+                "--runtime-cache-root",
+                "ci-cache",
+            ]
+        )
+        env = environment_module.AkbEnvironment(mode="host", work_root=Path("/tmp/workspace"))
+
+        with mock.patch.object(cli, "discover_current_environment", return_value=env):
+            with mock.patch.object(cli, "host_target_config_path", return_value=Path("/tmp/workspace/.akb/targets/configs/android15-6.6.toml")):
+                with mock.patch.object(cli, "parse_snapshot_git_projects", return_value=["common"]):
+                    with mock.patch.object(cli, "build_snapshot_image") as build_snapshot_image:
+                        result = args.handler(args)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(build_snapshot_image.call_args.kwargs["runtime_cache_root"], Path("ci-cache").resolve())
+
     def test_sync_source_uses_host_default_target_and_config_cache_root(self) -> None:
         args = cli.build_parser().parse_args(["sync-source"])
         env = environment_module.AkbEnvironment(mode="host", work_root=Path("/tmp/workspace"))

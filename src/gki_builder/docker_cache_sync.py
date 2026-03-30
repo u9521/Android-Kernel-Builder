@@ -145,6 +145,8 @@ def save_cache(
     if runtime_cache_root.is_symlink():
         if runtime_cache_root.resolve(strict=False) != host_cache_root.resolve():
             raise ValueError(f"Expected {runtime_cache_root} to point to {host_cache_root}")
+        runtime_cache_root.unlink()
+        shutil.copytree(host_cache_root, runtime_cache_root, symlinks=True, copy_function=shutil.copy2)
     else:
         shutil.rmtree(host_cache_root)
         shutil.copytree(runtime_cache_root, host_cache_root, symlinks=True, copy_function=shutil.copy2)

@@ -99,6 +99,45 @@ source_dir = "android-kernel"
             self.assertIn("export GKI_MANIFEST_SOURCE=local\n", env_text)
             self.assertIn(f"export GKI_MANIFEST_PATH={workspace_root / '.akb' / 'manifests' / 'sample.xml'}\n", env_text)
 
+    def test_prepare_runtime_image_layout_reads_bundled_docker_target_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            akb_root = temp_root / "tooling"
+            workspace_root = temp_root / "workspace"
+            config_path = akb_root / ".docker-target" / "target.toml"
+            manifest_path = akb_root / ".docker-target" / "manifest.xml"
+            akb_root.mkdir(parents=True, exist_ok=True)
+            (akb_root / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            workspace_root.mkdir(parents=True, exist_ok=True)
+            manifest_path.write_text("<manifest />\n", encoding="utf-8")
+            config_path.write_text(
+                """
+name = "sample"
+
+[manifest]
+source = "local"
+url = "https://android.googlesource.com/kernel/manifest"
+path = "manifest.xml"
+
+[workspace]
+source_dir = "android-kernel"
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            image_env.prepare_runtime_image_layout(
+                ".docker-target/target.toml",
+                workspace_root=workspace_root,
+                project_root=akb_root,
+            )
+
+            copied_manifest = workspace_root / ".akb" / "manifests" / "manifest.xml"
+            config_text = (workspace_root / ".akb" / "active-target.toml").read_text(encoding="utf-8")
+            self.assertEqual(copied_manifest.read_text(encoding="utf-8"), "<manifest />\n")
+            self.assertIn('path = "manifest.xml"', config_text)
+
     def test_prepare_runtime_image_layout_rejects_manifest_path_outside_search_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

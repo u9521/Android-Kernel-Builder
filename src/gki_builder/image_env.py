@@ -145,7 +145,7 @@ def _embedded_manifest_relative_path(value: str) -> Path:
 
 
 def _resolve_source_manifest_path(config_path: Path, manifest_path_value: str) -> Path:
-    search_root = (config_path.parent.parent / "manifests").resolve()
+    search_root = _manifest_search_root(config_path)
     embedded_manifest_path = _embedded_manifest_relative_path(manifest_path_value)
     candidate = (search_root / embedded_manifest_path).resolve()
     try:
@@ -159,6 +159,12 @@ def _resolve_source_manifest_path(config_path: Path, manifest_path_value: str) -
     raise FileNotFoundError(
         f"Local manifest file not found for Docker runtime packaging: {manifest_path_value} (search root: {search_root})"
     )
+
+
+def _manifest_search_root(config_path: Path) -> Path:
+    if config_path.parent.name == ".docker-target":
+        return config_path.parent.resolve()
+    return (config_path.parent.parent / "manifests").resolve()
 
 
 def _absolute_path(root: Path, value: str) -> str:

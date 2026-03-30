@@ -25,17 +25,29 @@ jobs:
         include:
           - image_name: workspace
             image_repo: gki-workspace
-            dockerfile: .image-package/docker/workspace.Dockerfile
             snapshot_git_projects: ""
           - image_name: snapshot
             image_repo: gki-snapshot
-            dockerfile: .image-package/docker/snapshot.Dockerfile
             snapshot_git_projects: common
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install gki-builder
+        run: python3 -m pip install -e .
+
+      - name: Prepare host AKB environment
+        run: |
+          set -euo pipefail
+          rm -rf .akb
+          mkdir -p .akb/targets
+          cat > .akb/config.toml <<'EOF'
+          version = 1
+          EOF
+          ln -s "$PWD/configs/targets" .akb/targets/configs
+          ln -s "$PWD/manifests" .akb/targets/manifests
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -56,30 +68,15 @@ jobs:
           restore-keys: |
             build-runtime-cache-${{ runner.os }}-${{ matrix.image_name }}-${{ inputs.target }}-
 
-      - name: Resolve source target definition
-        id: target
+      - name: Validate source target definition
         run: |
-          SOURCE_TARGET_FILE="configs/targets/${{ inputs.target }}.toml"
-          if [ ! -f "$SOURCE_TARGET_FILE" ]; then
-            echo "::error::Missing source target definition: $SOURCE_TARGET_FILE"
+          set -euo pipefail
+          source_target_file="configs/targets/${{ inputs.target }}.toml"
+          if [ ! -f "$source_target_file" ]; then
+            echo "::error::Missing source target definition: $source_target_file"
             echo "Available configs:"
             ls configs/targets/*.toml
             exit 1
-          fi
-          echo "source_target_file=$SOURCE_TARGET_FILE" >> "$GITHUB_OUTPUT"
-
-      - name: Package minimal image context
-        run: python3 scripts/package-image.py --output-dir .image-package
-
-      - name: Seed image runtime cache
-        run: |
-          set -euo pipefail
-          cache_root=".image-build-cache/${{ matrix.image_name }}-${{ inputs.target }}"
-          image_cache_root=".image-package/.cache-host"
-          rm -rf "$image_cache_root"
-          mkdir -p "$image_cache_root"
-          if [ -d "$cache_root" ]; then
-            cp -a "$cache_root/." "$image_cache_root/"
           fi
 
       - name: Build ${{ matrix.image_name }} image
@@ -88,55 +85,35 @@ jobs:
           set -euo pipefail
           start_ts=$(date +%s)
           image_ref="ghcr.io/${{ github.repository_owner }}/${{ matrix.image_repo }}:${{ inputs.tag }}"
-          extra_build_args=()
-          if [ -n "${{ matrix.snapshot_git_projects }}" ]; then
-            extra_build_args+=(--build-arg "SNAPSHOT_GIT_PROJECTS=${{ matrix.snapshot_git_projects }}")
-          fi
+          cache_root=".image-build-cache/${{ matrix.image_name }}-${{ inputs.target }}"
 
-          docker buildx build \
-            --file "${{ matrix.dockerfile }}" \
-            --build-arg BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm \
-            --build-arg SOURCE_TARGET_FILE=${{ steps.target.outputs.source_target_file }} \
-            --tag "${image_ref}" \
-            --load \
-            "${extra_build_args[@]}" \
-            .image-package
+          if [ "${{ matrix.image_name }}" = "workspace" ]; then
+            gki-builder docker-build-workspace \
+              --tag "$image_ref" \
+              --base-image "ghcr.io/${{ github.repository_owner }}/gki-base:bookworm" \
+              --target "${{ inputs.target }}" \
+              --runtime-cache-root "$cache_root" \
+              --push
+          else
+            gki-builder docker-build-snapshot \
+              --tag "$image_ref" \
+              --base-image "ghcr.io/${{ github.repository_owner }}/gki-base:bookworm" \
+              --target "${{ inputs.target }}" \
+              --snapshot-git-projects "${{ matrix.snapshot_git_projects }}" \
+              --runtime-cache-root "$cache_root" \
+              --push
+          fi
 
           end_ts=$(date +%s)
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
           echo "build_duration_seconds=$((end_ts - start_ts))" >> "$GITHUB_OUTPUT"
-
-      - name: Export ${{ matrix.image_name }} runtime cache
-        if: success()
-        run: |
-          set -euo pipefail
-          cache_root=".image-build-cache/${{ matrix.image_name }}-${{ inputs.target }}"
-          image_ref="${{ steps.build_image.outputs.image_ref }}"
-          rm -rf "$cache_root"
-          mkdir -p "$cache_root"
-          container_id=$(docker create "$image_ref")
-          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
-          docker cp "$container_id:/cache-host/." "$cache_root/"
-          docker rm -f "$container_id" >/dev/null 2>&1
-          trap - EXIT
-
-      - name: Push ${{ matrix.image_name }} image
-        if: success()
-        run: docker push "${{ steps.build_image.outputs.image_ref }}"
-
-      - name: Save ${{ matrix.image_name }} build cache
-        if: success() && steps.build_cache_restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .image-build-cache/${{ matrix.image_name }}-${{ inputs.target }}
-          key: ${{ steps.build_cache_restore.outputs.cache-primary-key }}
 
       - name: Append build summary
         if: always()
         env:
           IMAGE_REF: ${{ steps.build_image.outputs.image_ref }}
           BUILD_DURATION_SECONDS: ${{ steps.build_image.outputs.build_duration_seconds }}
-          SOURCE_TARGET_FILE: ${{ steps.target.outputs.source_target_file }}
+          SOURCE_TARGET_FILE: configs/targets/${{ inputs.target }}.toml
           TARGET_INPUT: ${{ inputs.target }}
           BUILD_STEP_OUTCOME: ${{ steps.build_image.outcome }}
         run: |
