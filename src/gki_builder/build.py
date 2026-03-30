@@ -210,6 +210,7 @@ def _build_legacy(
         return
 
     env["CCACHE_DIR"] = str((cache_root / target.cache.ccache_dir).resolve())
+    env["CCACHE_COMPILERCHECK"] = "none"
     ccache_clang = _create_ccache_clang_symlink(cache_root, env)
     base_cmdline.append(f"CC={ccache_clang}")
     run_command(base_cmdline, cwd=source_dir, env=env)
