@@ -5,5 +5,4 @@ extends = "kleaf-base"
 branch = "common-android16-6.12"
 
 [build]
-dist_dir = "gki/android16-6.12"
 lto = "none"

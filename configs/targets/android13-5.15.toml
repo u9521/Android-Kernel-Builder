@@ -4,5 +4,3 @@ extends = "legacy-base"
 [manifest]
 branch = "common-android13-5.15"
 
-[build]
-dist_dir = "gki/android13-5.15"

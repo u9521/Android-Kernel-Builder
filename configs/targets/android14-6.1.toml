@@ -4,6 +4,3 @@ extends = "kleaf-base"
 [manifest]
 branch = "common-android14-6.1"
 
-[build]
-warmup_target = "//common:kernel_{arch}"
-dist_dir = "gki/android14-6.1"

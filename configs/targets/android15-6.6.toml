@@ -4,5 +4,3 @@ extends = "kleaf-base"
 [manifest]
 branch = "common-android15-6.6"
 
-[build]
-dist_dir = "android15-6.6"
