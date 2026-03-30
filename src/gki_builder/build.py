@@ -257,7 +257,7 @@ def _build_kleaf(
         f"--disk_cache={bazel_cache}",
         f"--jobs={jobs}",
         "--config=fast",
-        "--config=stamp",
+        "--config=local",
         "--verbose_failures",
     ]
     if target.build.lto:
@@ -330,7 +330,7 @@ def _warmup_kleaf(
         f"--disk_cache={bazel_cache}",
         f"--jobs={jobs}",
         "--config=fast",
-        "--config=stamp",
+        "--config=local",
         "--verbose_failures",
     ]
     if target.build.lto:
@@ -382,7 +382,7 @@ def _query_warmup_kleaf_outputs(
             "cquery",
             "--output=files",
             "--config=fast",
-            "--config=stamp",
+            "--config=local",
             warmup_target.format(arch=target.build.arch),
         ],
         cwd=source_dir,

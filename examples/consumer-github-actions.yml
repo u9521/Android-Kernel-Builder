@@ -15,6 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore downstream build caches
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: gki-cache-${{ runner.os }}-android15-6.6-v1
+          restore-keys: |
+            gki-cache-${{ runner.os }}-android15-6.6-
+            gki-cache-${{ runner.os }}-
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -27,15 +36,19 @@ jobs:
 
       - name: Apply source patch and run incremental build
         run: |
+          # Prefer the container default user (root) in CI so cache save/restore can
+          # reconcile ownership for host-mounted ccache and Bazel caches reliably.
           DOWNSTREAM_ROOT=/workspace/downstream
           docker run --rm \
             -e DOWNSTREAM_ROOT="$DOWNSTREAM_ROOT" \
             -v "$PWD":"$DOWNSTREAM_ROOT" \
-            -v "$PWD/.cache":/workspace/.cache \
+            -v "$PWD/.cache":/cache-host \
             -v "$PWD/out":/workspace/out \
             ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
             bash -lc '
+              gki-builder-cache-sync prepare &&
               cd "$GKI_SOURCE_ROOT" &&
               git apply "$DOWNSTREAM_ROOT/patches/my-change.patch" &&
-              gki-builder build --output-root /workspace/out
+              gki-builder build --output-root /workspace/out &&
+              gki-builder-cache-sync save
             '

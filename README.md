@@ -182,7 +182,10 @@ This command updates both global and system `safe.directory` scopes.
 - `warmup-build` exports warmup outputs to `<output-root>/<dist_dir>` when `build.warmup_target` is configured.
 - Snapshot images run snapshot pruning before `gki-builder warmup-build`, preserving selected Git projects while removing `.repo` metadata.
 - After snapshot pruning removes `.repo`, downstream flows should use Git commands inside preserved project directories instead of `repo` commands.
+- `gki-builder-cache-sync` is installed into Docker images. It replaces `/workspace/.cache` with a symlink to a mounted host cache only when that host cache already has content, otherwise it keeps using the image cache. During `prepare`, it changes the mounted cache ownership to match the image's existing `/workspace/.cache` owner before the build; if the container lacks `CAP_CHOWN`, it fails fast.
+- In CI, prefer running the container as `root`. Running as another user can make host-mounted cache ownership harder to reconcile during restore, especially for `ccache` and Bazel caches, and `gki-builder-cache-sync prepare` will fail if the container lacks `CAP_CHOWN`.
 - The GitHub Actions publishing flow builds workspace and snapshot images in a matrix, with each image built and pushed on its own runner from the same base image and target definition.
+- The workspace and snapshot image publishing workflow restores a repository-side runtime cache with `actions/cache`, copies it into the packaged image context, runs `gki-builder-cache-sync` during image build, then exports the refreshed `/cache-host` tree back to `actions/cache` after the image is built.
 
 ## Notes
 
