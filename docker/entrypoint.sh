@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-readonly GKI_ENV_FILE="/workspace/docker_metadata/gki-builder.env"
+readonly GKI_ENV_FILE="/workspace/docker_datas/gki-builder.env"
 
 if [[ -f "${GKI_ENV_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -12,7 +12,7 @@ if [[ -f "${GKI_ENV_FILE}" ]]; then
 fi
 
 if [[ $# -eq 0 ]]; then
-  exec /bin/bash
+  set -- /bin/bash
 fi
 
-exec "$@"
+"$@"

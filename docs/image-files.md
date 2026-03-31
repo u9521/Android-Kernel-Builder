@@ -13,13 +13,14 @@ This document describes the main fixed paths used by Docker images.
 - Minimal AKB runtime payload.
 - Does not contain the full source repository.
 
-### `/workspace/docker_metadata`
+### `/workspace/docker_datas`
 
 - Docker-only metadata root.
 
 ### `/workspace/.cache`
 
-- Reusable cache root.
+- Runtime overlay mountpoint.
+- Image builds temporarily mount `container_cache.img` here during warmup.
 
 ### `/workspace/out`
 
@@ -42,15 +43,53 @@ This document describes the main fixed paths used by Docker images.
 - Embedded manifest directory.
 - Contains only the manifest files needed by the selected image target.
 
-### `/workspace/docker_metadata/gki-builder.env`
+### `/workspace/docker_datas/gki-builder.env`
 
 - Generated shell fragment loaded by `docker/entrypoint.sh`.
 - Exports target, build, and manifest metadata for downstream CI scripts.
 
+### `/workspace/docker_datas/image.json`
+
+- Generated runtime image metadata.
+- Records target name, cache layout version, and fixed Docker runtime paths.
+
+### `/workspace/docker_datas/container_cache.img`
+
+- Image-baked read-only base cache image.
+- Created during image build by mounting a sparse ext4 image on `/workspace/.cache`, warming it, then shrinking it.
+
+### `/workspace/docker_datas/container_cache.json`
+
+- Metadata for `container_cache.img`.
+- Stores `container_cache_sha256` used to validate external overlay deltas.
+
+### `/workspace/docker_datas/outerimage/outer-cache.img`
+
+- External writable delta cache image used at runtime as overlay `upperdir` and `workdir`.
+
+### `/workspace/docker_datas/outerimage/outer-cache.json`
+
+- Metadata for `outer-cache.img`.
+- Must match the embedded `container_cache_sha256` to be reused.
+
+### `/workspace/docker_datas/outerimage/next-outer-cache.img`
+
+- Exported runtime delta image produced after a container run.
+- Shrunk with `resize2fs -M` before export.
+
+### `/workspace/docker_datas/outerimage/next-outer-cache.json`
+
+- Metadata written alongside `next-outer-cache.img`.
+
+### `/workspace/docker_datas/.overlays/`
+
+- Temporary mount roots used by runtime cache setup.
+- Holds the loop-mounted lower image, loop-mounted upper image, and merged overlay state.
+
 ### `/usr/local/bin/gki-workspace-entrypoint`
 
 - Image entrypoint helper.
-- Sources `/workspace/docker_metadata/gki-builder.env` and then runs the requested command.
+- Sources `/workspace/docker_datas/gki-builder.env`, initializes runtime cache mounts, and then runs the requested command.
 
 ### `/usr/local/bin/gki-builder`
 
@@ -70,9 +109,25 @@ This document describes the main fixed paths used by Docker images.
 
 - Repo reference cache.
 
-### `/workspace/.cache/bazel`
+### `/workspace/.cache/bazel/state`
+
+- Bazel local state directory.
+- Passed as `--output_base`.
+
+### `/workspace/.cache/bazel/repo`
+
+- Bazel repository cache.
+- Passed as `--repository_cache`.
+
+### `/workspace/.cache/bazel/diskcache`
 
 - Bazel disk cache.
+- Passed as `--disk_cache`.
+
+### `/workspace/.cache/bazel/kleaf-out`
+
+- Kleaf persistent local output cache.
+- Passed as `--config=local --cache_dir`.
 
 ### `/workspace/.cache/ccache`
 
@@ -85,19 +140,19 @@ This document describes the main fixed paths used by Docker images.
 
 ## Target Metadata
 
-### `/workspace/docker_metadata/targets/<target>/workspace.json`
+### `/workspace/docker_datas/targets/<target>/workspace.json`
 
 - Metadata written after `gki-builder sync-source`.
 
-### `/workspace/docker_metadata/targets/<target>/disk-usage.json`
+### `/workspace/docker_datas/targets/<target>/disk-usage.json`
 
 - Metadata written after `gki-builder build` or `gki-builder warmup-build`.
 
-### `/workspace/docker_metadata/targets/<target>/warmup-outputs.json`
+### `/workspace/docker_datas/targets/<target>/warmup-outputs.json`
 
 - Metadata written after `gki-builder warmup-build` when a warmup target is configured.
 
-### `/workspace/docker_metadata/targets/<target>/snapshot.json`
+### `/workspace/docker_datas/targets/<target>/snapshot.json`
 
 - Metadata written by snapshot image generation.
 

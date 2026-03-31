@@ -3,6 +3,7 @@
 # Copyright (C) 2026 u9521
 
 import importlib
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -40,19 +41,27 @@ source_dir = "android-kernel"
             )
 
             akb_runtime_dir = workspace_root / ".akb"
-            image_dir = workspace_root / "docker_metadata"
+            image_dir = workspace_root / "docker_datas"
             config_text = (akb_runtime_dir / "active-target.toml").read_text(encoding="utf-8")
             env_text = (image_dir / "gki-builder.env").read_text(encoding="utf-8")
+            image_info = json.loads((image_dir / "image.json").read_text(encoding="utf-8"))
             self.assertIn('name = "sample"', config_text)
             self.assertIn('version = 1', config_text)
             self.assertNotIn('metadata_dir = ', config_text)
+            self.assertIn('[cache]\n', config_text)
+            self.assertIn('bazel_dir = "bazel"', config_text)
+            self.assertIn('kleaf_dir = "kleaf-out"', config_text)
             self.assertIn(f"export GKI_TARGET_NAME=sample\n", env_text)
             self.assertIn(f"export GKI_SOURCE_ROOT={workspace_root / 'android-kernel'}\n", env_text)
-            self.assertIn(f"export GKI_DOCKER_METADATA_ROOT={image_dir}\n", env_text)
+            self.assertIn("export GKI_SOURCE_MODE=embedded\n", env_text)
+            self.assertIn(f"export GKI_DOCKER_DATAS_ROOT={image_dir}\n", env_text)
             self.assertIn(f"export GKI_TARGET_METADATA_ROOT={image_dir / 'targets' / 'sample'}\n", env_text)
             self.assertIn(f"export GKI_DIST_DIR={workspace_root / 'out' / 'sample'}\n", env_text)
             self.assertIn("export GKI_BUILD_SYSTEM=\n", env_text)
             self.assertIn("export GKI_MANIFEST_SOURCE=\n", env_text)
+            self.assertEqual(image_info["target"], "sample")
+            self.assertEqual(image_info["source_mode"], "embedded")
+            self.assertEqual(image_info["cache_layout_version"], 1)
 
     def test_prepare_runtime_image_layout_copies_local_manifest_into_image_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -90,7 +99,7 @@ source_dir = "android-kernel"
             )
 
             akb_runtime_dir = workspace_root / ".akb"
-            image_dir = workspace_root / "docker_metadata"
+            image_dir = workspace_root / "docker_datas"
             copied_manifest = akb_runtime_dir / "manifests" / "sample.xml"
             config_text = (akb_runtime_dir / "active-target.toml").read_text(encoding="utf-8")
             env_text = (image_dir / "gki-builder.env").read_text(encoding="utf-8")
@@ -215,10 +224,12 @@ branch = "common-android12-5.10-2025-09"
             )
 
             config_text = (workspace_root / ".akb" / "active-target.toml").read_text(encoding="utf-8")
-            env_text = (workspace_root / "docker_metadata" / "gki-builder.env").read_text(encoding="utf-8")
+            env_text = (workspace_root / "docker_datas" / "gki-builder.env").read_text(encoding="utf-8")
             self.assertIn('name = "child"', config_text)
             self.assertIn('url = "https://android.googlesource.com/kernel/manifest"', config_text)
             self.assertIn('branch = "common-android12-5.10-2025-09"', config_text)
+            self.assertIn('bazel_dir = "bazel"', config_text)
+            self.assertIn('kleaf_dir = "kleaf-out"', config_text)
             self.assertIn("export GKI_MANIFEST_URL=https://android.googlesource.com/kernel/manifest\n", env_text)
             self.assertIn("export GKI_MANIFEST_BRANCH=common-android12-5.10-2025-09\n", env_text)
             self.assertIn(f"export GKI_SOURCE_ROOT={workspace_root / 'android-kernel-base'}\n", env_text)

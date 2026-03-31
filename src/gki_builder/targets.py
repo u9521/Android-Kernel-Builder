@@ -44,6 +44,7 @@ class BuildConfig:
 class CacheConfig:
     repo_dir: str = "repo"
     bazel_dir: str = "bazel"
+    kleaf_dir: str = "kleaf-out"
     ccache_dir: str = "ccache"
 
 
@@ -140,9 +141,10 @@ def _parse_target_definition_file(
     cache = CacheConfig(
         repo_dir=_required_string(cache_payload.get("repo_dir", "repo"), field="cache.repo_dir", config_path=path),
         bazel_dir=_required_string(cache_payload.get("bazel_dir", "bazel"), field="cache.bazel_dir", config_path=path),
+        kleaf_dir=_required_string(cache_payload.get("kleaf_dir", "kleaf-out"), field="cache.kleaf_dir", config_path=path),
         ccache_dir=_required_string(cache_payload.get("ccache_dir", "ccache"), field="cache.ccache_dir", config_path=path),
     )
-    _validate_cache_for_build(cache_payload, build, path)
+    _validate_cache_for_build(cache, cache_payload, build, path)
 
     workspace_payload_obj = payload.get("workspace")
     if workspace_payload_obj is None:
@@ -319,6 +321,7 @@ def validate_build(build: BuildConfig, config_path: Path) -> None:
 
 
 def _validate_cache_for_build(
+    cache: CacheConfig,
     cache_payload: dict[str, object],
     build: BuildConfig,
     config_path: Path,
@@ -330,6 +333,8 @@ def _validate_cache_for_build(
         raise ValueError(f"cache.ccache_dir is not supported for kleaf builds in {config_path}")
     if not build_spec.allows_cache_bazel_dir and "bazel_dir" in cache_payload:
         raise ValueError(f"cache.bazel_dir is not supported for legacy builds in {config_path}")
+    if not build_spec.allows_cache_bazel_dir and "kleaf_dir" in cache_payload:
+        raise ValueError(f"cache.kleaf_dir is not supported for legacy builds in {config_path}")
     if build.system == "legacy" and build.use_ccache and "ccache_dir" not in cache_payload:
         raise ValueError(f"cache.ccache_dir is required when build.use_ccache=true in {config_path}")
     if build.system == "legacy" and not build.use_ccache and "ccache_dir" in cache_payload:
@@ -337,6 +342,21 @@ def _validate_cache_for_build(
             f"warning: cache.ccache_dir is ignored when build.use_ccache=false in {config_path}",
             flush=True,
         )
+    _validate_relative_cache_dir(cache.repo_dir, field="cache.repo_dir", config_path=config_path)
+    _validate_relative_cache_dir(cache.bazel_dir, field="cache.bazel_dir", config_path=config_path)
+    _validate_kleaf_dir(cache.kleaf_dir, config_path)
+
+
+def _validate_relative_cache_dir(value: str, *, field: str, config_path: Path) -> None:
+    path = Path(value)
+    if not value or path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise ValueError(f"Invalid {field} in {config_path}: path must be a relative subdirectory")
+
+
+def _validate_kleaf_dir(value: str, config_path: Path) -> None:
+    path = Path(value)
+    if not value or len(path.parts) != 1 or path.name in {".", ".."}:
+        raise ValueError(f"Invalid cache.kleaf_dir in {config_path}: expected a single directory name")
 
 
 def _resolve_manifest_path(

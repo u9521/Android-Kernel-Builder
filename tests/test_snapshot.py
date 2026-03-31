@@ -57,7 +57,7 @@ class SnapshotTests(unittest.TestCase):
             temp_root = Path(temp_dir)
             workspace_root = temp_root / "workspace"
             source_dir = workspace_root / "android-kernel"
-            metadata_dir = workspace_root / "docker_metadata" / "targets" / "sample"
+            metadata_dir = workspace_root / "docker_datas" / "targets" / "sample"
             common_dir = source_dir / "common"
             tools_dir = source_dir / "tools"
             common_dir.mkdir(parents=True, exist_ok=True)
@@ -110,7 +110,7 @@ source_dir = "android-kernel"
             temp_root = Path(temp_dir)
             workspace_root = temp_root / "workspace"
             source_dir = workspace_root / "android-kernel"
-            metadata_dir = workspace_root / "docker_metadata" / "targets" / "sample"
+            metadata_dir = workspace_root / "docker_datas" / "targets" / "sample"
             common_dir = source_dir / "common"
             common_dir.mkdir(parents=True, exist_ok=True)
             (source_dir / ".repo" / "manifests").mkdir(parents=True, exist_ok=True)

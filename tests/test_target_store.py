@@ -88,7 +88,7 @@ source_dir = "android-kernel"
 
             target = target_store.resolve_target(environment)
 
-        self.assertEqual(target.workspace.metadata_dir, "docker_metadata/targets")
+        self.assertEqual(target.workspace.metadata_dir, "docker_datas/targets")
         self.assertEqual(target.manifest.path, work_root / ".akb" / "manifests" / "avd" / "default.xml")
 
     def test_load_host_target_falls_back_to_declared_name_search(self) -> None:

@@ -13,17 +13,24 @@ jobs:
       packages: read
       contents: read
     steps:
+      # Downstream source checkout. This repository is mounted into the container
+      # at /workspace/downstream so patches or extra scripts can be applied there.
       - uses: actions/checkout@v4
 
-      - name: Restore downstream build caches
+      # Restore the writable delta cache image from the previous run.
+      # The base cache lives inside the pulled CI image as container_cache.img.
+      # This directory stores the input delta as outer-cache.img/json.
+      - name: Restore outer cache image
+        id: outer_cache_restore
         uses: actions/cache@v4
         with:
-          path: .cache
-          key: gki-cache-${{ runner.os }}-android15-6.6-v1
+          path: .outer-cache
+          key: gki-outer-cache-${{ runner.os }}-android15-6.6-${{ github.run_id }}
           restore-keys: |
-            gki-cache-${{ runner.os }}-android15-6.6-
-            gki-cache-${{ runner.os }}-
+            gki-outer-cache-${{ runner.os }}-android15-6.6-
+            gki-outer-cache-${{ runner.os }}-
 
+      # Authenticate before pulling the prebuilt CI image from GHCR.
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -31,24 +38,70 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Pull the image that already contains synced source, embedded target
+      # metadata, and the baked-in base cache image.
       - name: Pull pre-warmed workspace image
         run: docker pull ghcr.io/<owner>/gki-workspace:android15-6.6-latest
 
+      # Run the downstream build inside the container.
+      #
+      # Important mounts:
+      # - $PWD -> /workspace/downstream
+      #   Downstream checkout used to provide patches or extra scripts.
+      # - .outer-cache -> /workspace/docker_datas/outerimage
+      #   External writable delta cache directory managed explicitly by the
+      #   downstream workflow.
+      # - out -> /workspace/out
+      #   Build artifacts exported from the container.
+      #
+      # --privileged is required because runtime cache setup uses loop mounts
+      # and overlayfs managed by explicit gki-builder runtime-cache commands.
       - name: Apply source patch and run incremental build
         run: |
-          # Prefer the container default user (root) in CI so cache save/restore can
-          # reconcile ownership for host-mounted ccache and Bazel caches reliably.
+          set -euo pipefail
+
+          # The container sees the downstream checkout at this fixed path.
           DOWNSTREAM_ROOT=/workspace/downstream
+
+          # Ensure host-side export directories exist before mounting them.
+          mkdir -p .outer-cache out
+
           docker run --rm \
+            --privileged \
             -e DOWNSTREAM_ROOT="$DOWNSTREAM_ROOT" \
             -v "$PWD":"$DOWNSTREAM_ROOT" \
-            -v "$PWD/.cache":/cache-host \
+            -v "$PWD/.outer-cache":/workspace/docker_datas/outerimage \
             -v "$PWD/out":/workspace/out \
             ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
             bash -lc '
-              gki-builder-cache-sync prepare &&
-              cd "$GKI_SOURCE_ROOT" &&
-              git apply "$DOWNSTREAM_ROOT/patches/my-change.patch" &&
-              gki-builder build --output-root /workspace/out &&
-              gki-builder-cache-sync save
+              set -euo pipefail
+
+              # Always finalize the runtime cache on shell exit so loop mounts
+              # are cleaned up and the newest delta cache is exported even if
+              # patching or the build command fails.
+              trap "gki-builder runtime-cache-export || true" EXIT
+
+              gki-builder runtime-cache-init
+              cd "$GKI_SOURCE_ROOT"
+              git apply "$DOWNSTREAM_ROOT/patches/my-change.patch"
+              gki-builder build --output-root /workspace/out
             '
+
+          # Normalize the container export back into the stable input names that
+          # the next workflow run will restore and mount directly.
+          if [ -f .outer-cache/next-outer-cache.img ]; then
+            mv -f .outer-cache/next-outer-cache.img .outer-cache/outer-cache.img
+          fi
+          if [ -f .outer-cache/next-outer-cache.json ]; then
+            mv -f .outer-cache/next-outer-cache.json .outer-cache/outer-cache.json
+          fi
+
+      # Persist the normalized delta cache image for the next workflow run.
+      # This saves the stable outer-cache.img/json input names, not the transient
+      # next-outer-cache.* export names.
+      - name: Save next outer cache image
+        if: always() && hashFiles('.outer-cache/outer-cache.img', '.outer-cache/outer-cache.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .outer-cache
+          key: ${{ steps.outer_cache_restore.outputs.cache-primary-key }}

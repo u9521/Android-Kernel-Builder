@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ccache \
     ca-certificates \
     curl \
+    e2fsprogs \
     file \
     flex \
     git \
@@ -29,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     rsync \
     unzip \
+    util-linux \
     xz-utils \
     zip \
     && rm -rf /var/lib/apt/lists/*

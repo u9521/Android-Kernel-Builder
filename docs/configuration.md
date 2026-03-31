@@ -133,16 +133,25 @@ Build constraints:
 Reusable subdirectories under the selected cache root.
 
 - `repo_dir`: repo reference cache directory.
-- `bazel_dir`: bazel disk cache directory.
+- `bazel_dir`: bazel cache root directory.
+- `kleaf_dir`: kleaf cache directory name under `bazel_dir`.
 - `ccache_dir`: compiler cache directory.
+
+For Kleaf targets, AKB uses the following fixed subpaths under `cache.<bazel_dir>`:
+
+- `state`: Bazel `--output_base`
+- `repo`: Bazel `--repository_cache`
+- `diskcache`: Bazel `--disk_cache`
+- `<kleaf_dir>`: Kleaf `--config=local --cache_dir`
 
 Mode-specific constraints:
 
 - `build.system = "kleaf"`: do not define `cache.ccache_dir`.
-- `build.system = "legacy"`: do not define `cache.bazel_dir`.
+- `build.system = "legacy"`: do not define `cache.bazel_dir` or `cache.kleaf_dir`.
 - `build.system != "legacy"`: `build.use_ccache = true` is rejected.
 - `build.system = "legacy"` and `build.use_ccache = true`: `cache.ccache_dir` must be explicitly defined (no implicit default).
 - `build.system = "legacy"` and `build.use_ccache = false`: `cache.ccache_dir` is optional and ignored when present (with warning).
+- `cache.kleaf_dir` must be a single directory name, not a path.
 
 #### `[workspace]`
 
@@ -261,5 +270,5 @@ source_dir = "android-kernel"
 ## Metadata Rules
 
 - host mode does not write target metadata files.
-- docker target metadata is always written under `/workspace/docker_metadata/targets/<target>`.
+- docker target metadata is always written under `/workspace/docker_datas/targets/<target>`.
 - `workspace.metadata_dir` is fixed by layout constants and cannot be configured.

@@ -139,6 +139,10 @@ class BuildUsageTests(unittest.TestCase):
             repo_dir = source_dir / ".repo"
             repo_reference_dir = cache_root / "repo"
             bazel_dir = cache_root / "bazel"
+            bazel_state_dir = bazel_dir / "state"
+            bazel_repo_dir = bazel_dir / "repo"
+            bazel_diskcache_dir = bazel_dir / "diskcache"
+            kleaf_dir = bazel_dir / "kleaf-out"
             ccache_dir = cache_root / "ccache"
             output_dir = output_root / "dist"
 
@@ -146,7 +150,10 @@ class BuildUsageTests(unittest.TestCase):
                 source_dir,
                 repo_dir,
                 repo_reference_dir,
-                bazel_dir,
+                bazel_state_dir,
+                bazel_repo_dir,
+                bazel_diskcache_dir,
+                kleaf_dir,
                 ccache_dir,
                 output_dir,
             ]:
@@ -155,7 +162,10 @@ class BuildUsageTests(unittest.TestCase):
             (source_dir / "kernel.bin").write_bytes(b"a" * 100)
             (repo_dir / "manifest.xml").write_bytes(b"b" * 30)
             (repo_reference_dir / "ref.pack").write_bytes(b"d" * 11)
-            (bazel_dir / "cache.bin").write_bytes(b"e" * 13)
+            (bazel_state_dir / "state.bin").write_bytes(b"e" * 13)
+            (bazel_repo_dir / "repo.bin").write_bytes(b"h" * 23)
+            (bazel_diskcache_dir / "disk.bin").write_bytes(b"i" * 29)
+            (kleaf_dir / "out.bin").write_bytes(b"j" * 31)
             (ccache_dir / "entry.bin").write_bytes(b"f" * 17)
             (output_dir / "Image").write_bytes(b"g" * 19)
 
@@ -163,7 +173,7 @@ class BuildUsageTests(unittest.TestCase):
                 name="sample",
                 manifest=targets.ManifestConfig(source="remote"),
                 build=targets.BuildConfig(system="kleaf", arch="aarch64", dist_dir="dist"),
-                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
+                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", kleaf_dir="kleaf-out", ccache_dir="ccache"),
                 workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
                 config_path=Path("sample.toml"),
             )
@@ -173,12 +183,103 @@ class BuildUsageTests(unittest.TestCase):
 
             self.assertEqual(sections["source"]["bytes"], 100)
             self.assertEqual(sections["repo_metadata"]["bytes"], 30)
-            self.assertEqual(sections["cache"]["bytes"], 41)
+            self.assertEqual(sections["cache"]["bytes"], 124)
             self.assertEqual(sections["cache_repo_reference"]["bytes"], 11)
-            self.assertEqual(sections["cache_bazel"]["bytes"], 13)
+            self.assertEqual(sections["cache_bazel"]["bytes"], 96)
+            self.assertEqual(sections["cache_bazel_state"]["bytes"], 13)
+            self.assertEqual(sections["cache_bazel_repo"]["bytes"], 23)
+            self.assertEqual(sections["cache_bazel_diskcache"]["bytes"], 29)
+            self.assertEqual(sections["cache_kleaf"]["bytes"], 31)
             self.assertEqual(sections["cache_ccache"]["bytes"], 17)
             self.assertEqual(sections["output"]["bytes"], 19)
             self.assertNotIn("workspace_metadata", sections)
+
+    def test_build_kleaf_uses_split_bazel_cache_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_dir = temp_root / "android-kernel"
+            cache_root = temp_root / ".cache"
+            output_dir = temp_root / "out"
+            bazel_binary = source_dir / "tools" / "bazel"
+            bazel_binary.parent.mkdir(parents=True, exist_ok=True)
+            bazel_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+            target = targets.TargetConfig(
+                name="sample",
+                manifest=targets.ManifestConfig(source="remote"),
+                build=targets.BuildConfig(system="kleaf", arch="aarch64", target="//common:kernel_{arch}_dist"),
+                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", kleaf_dir="kleaf-out", ccache_dir="ccache"),
+                workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
+                config_path=Path("sample.toml"),
+            )
+
+            with mock.patch.object(build, "run_command", return_value=mock.Mock(stdout="")) as run_command:
+                build._build_kleaf(target, source_dir, cache_root, output_dir, {})
+
+            command = run_command.call_args_list[0].args[0]
+            self.assertIn(f"--output_base={(cache_root / 'bazel' / 'state').resolve()}", command)
+            self.assertIn(f"--repository_cache={(cache_root / 'bazel' / 'repo').resolve()}", command)
+            self.assertIn(f"--disk_cache={(cache_root / 'bazel' / 'diskcache').resolve()}", command)
+            self.assertIn(f"--cache_dir={(cache_root / 'bazel' / 'kleaf-out').resolve()}", command)
+            self.assertEqual(
+                run_command.call_args_list[1].args[0],
+                [
+                    str(bazel_binary),
+                    f"--output_base={(cache_root / 'bazel' / 'state').resolve()}",
+                    "shutdown",
+                ],
+            )
+            self.assertFalse(run_command.call_args_list[1].kwargs["check"])
+
+    def test_query_warmup_kleaf_outputs_uses_split_bazel_cache_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_dir = temp_root / "android-kernel"
+            cache_root = temp_root / ".cache"
+            bazel_binary = source_dir / "tools" / "bazel"
+            bazel_binary.parent.mkdir(parents=True, exist_ok=True)
+            bazel_binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+            target = targets.TargetConfig(
+                name="sample",
+                manifest=targets.ManifestConfig(source="remote"),
+                build=targets.BuildConfig(system="kleaf", arch="aarch64", warmup_target="//common:kernel_{arch}"),
+                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", kleaf_dir="kleaf-out", ccache_dir="ccache"),
+                workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
+                config_path=Path("sample.toml"),
+            )
+
+            with mock.patch.object(build, "run_command", return_value=mock.Mock(stdout="one\ntwo\n")) as run_command:
+                outputs = build._query_warmup_kleaf_outputs(target, source_dir, cache_root, {})
+
+            command = run_command.call_args_list[0].args[0]
+            self.assertEqual(outputs, ["one", "two"])
+            self.assertIn(f"--output_base={(cache_root / 'bazel' / 'state').resolve()}", command)
+            self.assertIn(f"--repository_cache={(cache_root / 'bazel' / 'repo').resolve()}", command)
+            self.assertIn(f"--disk_cache={(cache_root / 'bazel' / 'diskcache').resolve()}", command)
+            self.assertIn(f"--cache_dir={(cache_root / 'bazel' / 'kleaf-out').resolve()}", command)
+            self.assertEqual(
+                run_command.call_args_list[1].args[0],
+                [
+                    str(bazel_binary),
+                    f"--output_base={(cache_root / 'bazel' / 'state').resolve()}",
+                    "shutdown",
+                ],
+            )
+            self.assertFalse(run_command.call_args_list[1].kwargs["check"])
+
+    def test_run_bazel_command_shuts_down_even_after_failure(self) -> None:
+        bazel_binary = Path("/tmp/tools/bazel")
+        bazel_output_base = Path("/tmp/.cache/bazel/state")
+        command = [str(bazel_binary), f"--output_base={bazel_output_base}", "build", "//common:kernel_aarch64"]
+        failure = RuntimeError("build failed")
+
+        with mock.patch.object(build, "run_command", side_effect=[failure, mock.Mock(stdout="")]) as run_command:
+            with self.assertRaisesRegex(RuntimeError, "build failed"):
+                build._run_bazel_command(command, bazel_binary, bazel_output_base, cwd=Path("/tmp"), env={})
+
+        self.assertEqual(run_command.call_args_list[1].args[0], [str(bazel_binary), f"--output_base={bazel_output_base}", "shutdown"])
+        self.assertFalse(run_command.call_args_list[1].kwargs["check"])
 
     def test_warmup_kernel_uses_bazel_build_for_warmup_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -198,10 +299,10 @@ class BuildUsageTests(unittest.TestCase):
                     target="//common:kernel_{arch}_dist",
                     warmup_target="//common:kernel_{arch}",
                 ),
-                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
+                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", kleaf_dir="kleaf-out", ccache_dir="ccache"),
                 workspace=targets.WorkspaceConfig(
                     source_dir="android-kernel",
-                    metadata_dir="docker_metadata/targets",
+                    metadata_dir="docker_datas/targets",
                 ),
                 config_path=Path("sample.toml"),
             )
@@ -213,7 +314,7 @@ class BuildUsageTests(unittest.TestCase):
             warmup_kleaf.assert_called_once()
             self.assertEqual(output_dir, (output_root / target.build.dist_dir).resolve())
             metadata = json.loads(
-                (workspace_root / "docker_metadata" / "targets" / "sample" / "warmup-outputs.json").read_text(encoding="utf-8")
+                (workspace_root / "docker_datas" / "targets" / "sample" / "warmup-outputs.json").read_text(encoding="utf-8")
             )
             self.assertEqual(metadata["warmup_target"], "//common:kernel_{arch}")
 
@@ -270,7 +371,7 @@ class BuildUsageTests(unittest.TestCase):
             with mock.patch.object(build, "_query_warmup_kleaf_outputs", return_value=[
                 "bazel-out/k8-fastbuild/bin/common/kernel_aarch64/vmlinux"
             ]):
-                exported = build._export_warmup_kleaf_outputs(target, source_dir, output_dir, {})
+                exported = build._export_warmup_kleaf_outputs(target, source_dir, temp_root / ".cache", output_dir, {})
 
             destination = output_dir / "common" / "kernel_aarch64" / "vmlinux"
             self.assertEqual(destination.read_bytes(), b"kernel")

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 from typing import cast
@@ -27,9 +28,9 @@ def prepare_runtime_image_layout(
     runtime_root = Path(output_root).resolve() if output_root is not None else resolved_workspace_root
     akb_root = layout.akb_root(runtime_root)
     manifests_root = layout.embedded_manifests_root(runtime_root)
-    docker_metadata_dir = layout.docker_metadata_root(runtime_root)
-    final_docker_metadata_dir = layout.docker_metadata_root(resolved_workspace_root)
-    target_metadata_dir = final_docker_metadata_dir / "targets"
+    docker_datas_dir = layout.docker_datas_root(runtime_root)
+    final_docker_datas_dir = layout.docker_datas_root(resolved_workspace_root)
+    target_metadata_dir = layout.docker_target_metadata_dir(resolved_workspace_root)
 
     payload, _ = load_target_payload_with_inheritance(config_path)
     workspace_payload = cast(dict[str, object], payload.get("workspace") or {})
@@ -37,9 +38,12 @@ def prepare_runtime_image_layout(
     target_name = target_name_value if isinstance(target_name_value, str) else ""
     source_dir_value = workspace_payload.get("source_dir", "android-kernel")
     source_dir = source_dir_value if isinstance(source_dir_value, str) and source_dir_value else "android-kernel"
+    _apply_docker_runtime_cache_layout(payload)
 
     akb_root.mkdir(parents=True, exist_ok=True)
-    docker_metadata_dir.mkdir(parents=True, exist_ok=True)
+    docker_datas_dir.mkdir(parents=True, exist_ok=True)
+    layout.docker_outerimage_root(runtime_root).mkdir(parents=True, exist_ok=True)
+    layout.docker_overlays_root(runtime_root).mkdir(parents=True, exist_ok=True)
     active_target_payload = _prepare_active_target_payload(payload, config_path, manifests_root)
 
     layout.active_target_file(runtime_root).write_text(
@@ -56,6 +60,7 @@ def prepare_runtime_image_layout(
     layout.docker_env_file(runtime_root).write_text(
         f"export GKI_TARGET_NAME={target_name}\n"
         f"export GKI_SOURCE_ROOT={resolved_workspace_root / source_dir}\n"
+        f"export GKI_SOURCE_MODE=embedded\n"
         f"export GKI_BUILD_SYSTEM={build_payload.get('system', '')}\n"
         f"export GKI_BUILD_ARCH={build_payload.get('arch', '')}\n"
         f"export GKI_BUILD_TARGET={build_payload.get('target', '')}\n"
@@ -67,8 +72,25 @@ def prepare_runtime_image_layout(
         f"export GKI_MANIFEST_BRANCH={manifest_payload.get('branch', '')}\n"
         f"export GKI_MANIFEST_FILE={manifest_payload.get('file', '') or ''}\n"
         f"export GKI_MANIFEST_PATH={manifest_path}\n"
-        f"export GKI_DOCKER_METADATA_ROOT={final_docker_metadata_dir}\n"
+        f"export GKI_DOCKER_DATAS_ROOT={final_docker_datas_dir}\n"
         f"export GKI_TARGET_METADATA_ROOT={target_metadata_dir / target_name}\n",
+        encoding="utf-8",
+    )
+    layout.docker_image_info_file(runtime_root).write_text(
+        json.dumps(
+            {
+                "target": target_name,
+                "source_mode": "embedded",
+                "cache_mode": "overlay-image",
+                "cache_layout_version": 1,
+                "docker_datas_root": str(final_docker_datas_dir),
+                "container_cache_image": str(layout.docker_container_cache_image(resolved_workspace_root)),
+                "outerimage_root": str(layout.docker_outerimage_root(resolved_workspace_root)),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -127,6 +149,14 @@ def _prepare_active_target_payload(
     shutil.copyfile(source_manifest_path, manifest_copy_path)
     manifest["path"] = embedded_manifest_path.as_posix()
     return cloned_payload
+
+
+def _apply_docker_runtime_cache_layout(payload: dict[str, object]) -> None:
+    cache_payload = cast(dict[str, object], payload.setdefault("cache", {}))
+    cache_payload["bazel_dir"] = "bazel"
+    cache_payload["kleaf_dir"] = "kleaf-out"
+    cache_payload["repo_dir"] = "repo"
+    cache_payload["ccache_dir"] = "ccache"
 
 
 def _clone_mapping(value: object) -> object:

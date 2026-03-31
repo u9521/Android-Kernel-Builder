@@ -16,7 +16,6 @@ classifiers = [
 
 [project.scripts]
 gki-builder = "gki_builder.cli:main"
-gki-builder-cache-sync = "gki_builder.docker_cache_sync:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

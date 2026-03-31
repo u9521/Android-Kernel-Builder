@@ -461,6 +461,93 @@ bazel_dir = "bazel"
             with self.assertRaisesRegex(ValueError, "cache.bazel_dir"):
                 target_store.load_host_target(work_root, "sample")
 
+    def test_rejects_kleaf_dir_for_legacy_builds(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "legacy"
+arch = "aarch64"
+legacy_config = "common/build.config.gki.{arch}"
+
+[cache]
+kleaf_dir = "kleaf-out"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "cache.kleaf_dir"):
+                target_store.load_host_target(work_root, "sample")
+
+    def test_loads_kleaf_dir_as_single_directory_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+
+[cache]
+bazel_dir = "shared-bazel"
+kleaf_dir = "kleaf-local"
+repo_dir = "repo-cache"
+""",
+            )
+
+            target = target_store.load_host_target(work_root, "sample")
+
+        self.assertEqual(target.cache.bazel_dir, "shared-bazel")
+        self.assertEqual(target.cache.kleaf_dir, "kleaf-local")
+        self.assertEqual(target.cache.repo_dir, "repo-cache")
+
+    def test_rejects_kleaf_dir_with_nested_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            self._write_akb_config(work_root)
+            self._write_target(
+                work_root,
+                "sample",
+                """
+name = "sample"
+
+[manifest]
+source = "remote"
+url = "https://example.com/manifest"
+branch = "common-android15-6.6"
+
+[build]
+system = "kleaf"
+arch = "aarch64"
+
+[cache]
+kleaf_dir = "bazel/kleaf-out"
+""",
+            )
+
+            with self.assertRaisesRegex(ValueError, "single directory name"):
+                target_store.load_host_target(work_root, "sample")
+
     def test_warns_when_ccache_dir_is_set_but_ccache_disabled(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             work_root = Path(temp_dir)

@@ -13,6 +13,7 @@ from .docker import build_base_image, build_snapshot_image, build_workspace_imag
 from . import layout
 from .config import load_akb_config
 from .environment import discover_current_environment
+from .runtime_cache import finalize_runtime_cache, init_runtime_cache
 from .snapshot import parse_snapshot_git_projects
 from .target_store import host_target_config_path, resolve_target
 from .utils import run_command
@@ -70,10 +71,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Push directly with docker buildx instead of loading locally",
     )
-    docker_workspace.add_argument(
-        "--runtime-cache-root",
-        help="Optional directory copied into .cache-host in the packaged image context",
-    )
     docker_workspace.set_defaults(handler=handle_docker_build_workspace)
 
     docker_snapshot = subparsers.add_parser("docker-build-snapshot", help="Build the snapshot image")
@@ -95,10 +92,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Push directly with docker buildx instead of loading locally",
     )
-    docker_snapshot.add_argument(
-        "--runtime-cache-root",
-        help="Optional directory copied into .cache-host in the packaged image context",
-    )
     docker_snapshot.set_defaults(handler=handle_docker_build_snapshot)
 
     docker_run = subparsers.add_parser("docker-run", help="Run an existing image with mounted workspace")
@@ -108,6 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
     docker_run.add_argument("--output-root", default="out", help="Artifacts root directory")
     docker_run.add_argument("container_command", nargs=argparse.REMAINDER, help="Command passed to container")
     docker_run.set_defaults(handler=handle_docker_run)
+
+    runtime_cache_init = subparsers.add_parser("runtime-cache-init", help="Initialize Docker runtime cache mounts")
+    runtime_cache_init.set_defaults(handler=handle_runtime_cache_init)
+
+    runtime_cache_export = subparsers.add_parser("runtime-cache-export", help="Finalize and export Docker runtime cache")
+    runtime_cache_export.set_defaults(handler=handle_runtime_cache_export)
 
     git_safe = subparsers.add_parser("add-git-safe", help="Add directories to global Git safe.directory")
     git_safe.add_argument("path", help="Directory path to add")
@@ -151,6 +150,7 @@ def handle_show_target(args: argparse.Namespace) -> int:
         "cache": {
             "repo_dir": target.cache.repo_dir,
             "bazel_dir": target.cache.bazel_dir,
+            "kleaf_dir": target.cache.kleaf_dir,
             "ccache_dir": target.cache.ccache_dir,
         },
         "workspace": {
@@ -221,7 +221,6 @@ def handle_docker_build_workspace(args: argparse.Namespace) -> int:
         repo_root,
         repo_root / args.dockerfile,
         push=args.push,
-        runtime_cache_root=Path(args.runtime_cache_root).resolve() if args.runtime_cache_root else None,
     )
     return 0
 
@@ -239,7 +238,6 @@ def handle_docker_build_snapshot(args: argparse.Namespace) -> int:
         repo_root / args.dockerfile,
         parse_snapshot_git_projects(args.snapshot_git_projects),
         push=args.push,
-        runtime_cache_root=Path(args.runtime_cache_root).resolve() if args.runtime_cache_root else None,
     )
     return 0
 
@@ -255,6 +253,18 @@ def handle_docker_run(args: argparse.Namespace) -> int:
         Path(args.output_root),
         command or ["bash"],
     )
+    return 0
+
+
+def handle_runtime_cache_init(args: argparse.Namespace) -> int:
+    del args
+    init_runtime_cache(layout.DOCKER_WORK_ROOT)
+    return 0
+
+
+def handle_runtime_cache_export(args: argparse.Namespace) -> int:
+    del args
+    finalize_runtime_cache(layout.DOCKER_WORK_ROOT)
     return 0
 
 

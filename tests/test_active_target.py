@@ -153,7 +153,7 @@ arch = "aarch64"
 
 [workspace]
 source_dir = "android-kernel"
-metadata_dir = "docker_metadata/targets"
+metadata_dir = "docker_datas/targets"
 """.strip()
                 + "\n",
                 encoding="utf-8",

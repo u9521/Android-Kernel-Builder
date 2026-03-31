@@ -22,8 +22,20 @@ CACHE_DIR_NAME = ".cache"
 OUTPUT_DIR_NAME = "out"
 CCACHE_TOOLS_DIR_NAME = ".ccache-tools"
 CCACHE_CLANG_LINK_NAME = "clang"
-DOCKER_METADATA_DIR_NAME = "docker_metadata"
+DOCKER_DATAS_DIR_NAME = "docker_datas"
 TARGET_METADATA_DIR_NAME = "targets"
+DOCKER_OUTERIMAGE_DIR_NAME = "outerimage"
+DOCKER_OVERLAYS_DIR_NAME = ".overlays"
+DOCKER_IMAGE_INFO_FILE_NAME = "image.json"
+CONTAINER_CACHE_IMAGE_FILE_NAME = "container_cache.img"
+CONTAINER_CACHE_METADATA_FILE_NAME = "container_cache.json"
+OUTER_CACHE_IMAGE_FILE_NAME = "outer-cache.img"
+OUTER_CACHE_METADATA_FILE_NAME = "outer-cache.json"
+NEXT_OUTER_CACHE_IMAGE_FILE_NAME = "next-outer-cache.img"
+NEXT_OUTER_CACHE_METADATA_FILE_NAME = "next-outer-cache.json"
+OVERLAY_LOWER_DIR_NAME = "lower.mnt"
+OVERLAY_UPPER_DIR_NAME = "upper.mnt"
+OVERLAY_MERGED_DIR_NAME = "merged"
 
 DOCKER_WORK_ROOT = Path("/workspace")
 
@@ -86,12 +98,16 @@ def ccache_clang_link(cache_root: Path) -> Path:
     return ccache_tools_root(cache_root) / CCACHE_CLANG_LINK_NAME
 
 
-def docker_metadata_root(work_root: Path) -> Path:
-    return work_root / DOCKER_METADATA_DIR_NAME
+def docker_datas_root(work_root: Path) -> Path:
+    return work_root / DOCKER_DATAS_DIR_NAME
 
 
 def docker_env_file(work_root: Path) -> Path:
-    return docker_metadata_root(work_root) / ENV_FILE_NAME
+    return docker_datas_root(work_root) / ENV_FILE_NAME
+
+
+def docker_image_info_file(work_root: Path) -> Path:
+    return docker_datas_root(work_root) / DOCKER_IMAGE_INFO_FILE_NAME
 
 
 def active_target_file(work_root: Path) -> Path:
@@ -103,7 +119,7 @@ def embedded_manifests_root(work_root: Path) -> Path:
 
 
 def docker_target_metadata_dir(work_root: Path) -> Path:
-    return docker_metadata_root(work_root) / TARGET_METADATA_DIR_NAME
+    return docker_datas_root(work_root) / TARGET_METADATA_DIR_NAME
 
 
 def docker_target_metadata_root(work_root: Path, target_name: str) -> Path:
@@ -111,4 +127,48 @@ def docker_target_metadata_root(work_root: Path, target_name: str) -> Path:
 
 
 def docker_target_metadata_relative_dir() -> str:
-    return f"{DOCKER_METADATA_DIR_NAME}/{TARGET_METADATA_DIR_NAME}"
+    return f"{DOCKER_DATAS_DIR_NAME}/{TARGET_METADATA_DIR_NAME}"
+
+
+def docker_outerimage_root(work_root: Path) -> Path:
+    return docker_datas_root(work_root) / DOCKER_OUTERIMAGE_DIR_NAME
+
+
+def docker_overlays_root(work_root: Path) -> Path:
+    return docker_datas_root(work_root) / DOCKER_OVERLAYS_DIR_NAME
+
+
+def docker_container_cache_image(work_root: Path) -> Path:
+    return docker_datas_root(work_root) / CONTAINER_CACHE_IMAGE_FILE_NAME
+
+
+def docker_container_cache_metadata_file(work_root: Path) -> Path:
+    return docker_datas_root(work_root) / CONTAINER_CACHE_METADATA_FILE_NAME
+
+
+def docker_outer_cache_image(work_root: Path) -> Path:
+    return docker_outerimage_root(work_root) / OUTER_CACHE_IMAGE_FILE_NAME
+
+
+def docker_outer_cache_metadata_file(work_root: Path) -> Path:
+    return docker_outerimage_root(work_root) / OUTER_CACHE_METADATA_FILE_NAME
+
+
+def docker_next_outer_cache_image(work_root: Path) -> Path:
+    return docker_outerimage_root(work_root) / NEXT_OUTER_CACHE_IMAGE_FILE_NAME
+
+
+def docker_next_outer_cache_metadata_file(work_root: Path) -> Path:
+    return docker_outerimage_root(work_root) / NEXT_OUTER_CACHE_METADATA_FILE_NAME
+
+
+def docker_overlay_lower_root(work_root: Path) -> Path:
+    return docker_overlays_root(work_root) / OVERLAY_LOWER_DIR_NAME
+
+
+def docker_overlay_upper_root(work_root: Path) -> Path:
+    return docker_overlays_root(work_root) / OVERLAY_UPPER_DIR_NAME
+
+
+def docker_overlay_merged_root(work_root: Path) -> Path:
+    return docker_overlays_root(work_root) / OVERLAY_MERGED_DIR_NAME

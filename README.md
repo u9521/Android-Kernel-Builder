@@ -101,8 +101,13 @@ Docker runtime uses fixed paths:
 ├── .akb/
 │   ├── active-target.toml
 │   └── manifests/
-├── docker_metadata/
-│   └── gki-builder.env
+├── docker_datas/
+│   ├── gki-builder.env
+│   ├── image.json
+│   ├── container_cache.img
+│   ├── container_cache.json
+│   ├── outerimage/
+│   └── .overlays/
 ├── .cache/
 ├── out/
 └── android-kernel/
@@ -155,17 +160,6 @@ gki-builder docker-build-workspace \
   --push
 ```
 
-Seed the packaged image context with a restored runtime cache:
-
-```bash
-gki-builder docker-build-workspace \
-  --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target android15-6.6 \
-  --runtime-cache-root .image-build-cache/workspace-android15-6.6 \
-  --push
-```
-
 Build a one-image-one-target snapshot image:
 
 ```bash
@@ -186,6 +180,18 @@ gki-builder docker-run \
   -- bash -lc 'cd "$GKI_SOURCE_ROOT" && tools/bazel help'
 ```
 
+Recommended downstream CI runtime cache flow inside the container:
+
+```bash
+bash -lc '
+  set -euo pipefail
+  trap "gki-builder runtime-cache-export || true" EXIT
+  gki-builder runtime-cache-init
+  cd "$GKI_SOURCE_ROOT"
+  gki-builder build --output-root /workspace/out
+'
+```
+
 Add directories to global Git safe.directory:
 
 ```bash
@@ -198,18 +204,18 @@ This command updates both global and system `safe.directory` scopes.
 
 - Docker runtime paths are fixed in code; they are no longer configured by Docker path env vars.
 - Docker image packaging generates `.docker-target/target.toml` as a flattened single-target config for the selected image build; when that target uses a local manifest, the referenced file is bundled as `.docker-target/manifest.xml` and `manifest.path` is rewritten to match.
-- The entrypoint loads `/workspace/docker_metadata/gki-builder.env`.
+- The entrypoint loads `/workspace/docker_datas/gki-builder.env`.
 - That env file exports target, build, and manifest metadata for downstream CI scripts.
-- Workspace images run `gki-builder sync-source` and `gki-builder warmup-build` during image build.
+- Workspace images run `gki-builder sync-source`, create a sparse `container_cache.img`, mount it on `/workspace/.cache`, then run `gki-builder warmup-build` during image build.
 - `warmup-build` exports warmup outputs to `<output-root>/<dist_dir>` when `build.warmup_target` is configured.
 - Snapshot images run snapshot pruning before `gki-builder warmup-build`, preserving selected Git projects while removing `.repo` metadata.
 - After snapshot pruning removes `.repo`, downstream flows should use Git commands inside preserved project directories instead of `repo` commands.
 - `docker-build-base`, `docker-build-workspace`, and `docker-build-snapshot` accept `--push` to use `docker buildx build --push`, which avoids loading large images into the local Docker image store.
-- `gki-builder-cache-sync` is installed into Docker images. It replaces `/workspace/.cache` with a symlink to a mounted host cache only when that host cache already has content, otherwise it keeps using the image cache. During `prepare`, it changes the mounted cache ownership to match the image's existing `/workspace/.cache` owner before the build; if the container lacks `CAP_CHOWN`, it fails fast.
-- During image builds, `gki-builder-cache-sync save` materializes `/workspace/.cache` back into the image filesystem, so downstream CI gets a prewarmed image cache on the first run even when the build consumed a mounted `cache-host` context.
-- In CI, prefer running the container as `root`. Running as another user can make host-mounted cache ownership harder to reconcile during restore, especially for `ccache` and Bazel caches, and `gki-builder-cache-sync prepare` will fail if the container lacks `CAP_CHOWN`.
+- The image build no longer consumes external build caches. It always creates the base `container_cache.img` inside the image build, then shrinks it with `resize2fs -M`.
+- Runtime cache uses overlay mounts: image-baked `container_cache.img` is the lower read-only cache, and external `outer-cache.img` is the writable delta image.
+- The entrypoint does not manage cache mounts or exports; downstream CI should explicitly run `gki-builder runtime-cache-init` and guarantee `gki-builder runtime-cache-export` runs with a shell `trap` or equivalent cleanup step.
+- In CI, prefer running the container as `root` with enough mount capability, typically `--privileged`, because runtime cache setup requires loop mounts and overlayfs.
 - The GitHub Actions publishing flow builds workspace and snapshot images in a matrix, with each image built and pushed on its own runner from the same base image and target definition.
-- The workspace and snapshot image publishing workflow restores a repository-side runtime cache with `actions/cache`, then calls `gki-builder docker-build-workspace --push` or `gki-builder docker-build-snapshot --push` with `--runtime-cache-root` so the restored cache is passed as a named BuildKit context and consumed by `gki-builder-cache-sync prepare` / `gki-builder-cache-sync save` during the image build without creating an extra host-side cache copy.
 
 ## Notes
 

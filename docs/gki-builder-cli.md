@@ -83,8 +83,8 @@ gki-builder docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm
 - The final image contains a stripped runtime payload, not the full AKB repository checkout.
 - During packaging, the selected target is flattened (inheritance resolved) and written as an auto-generated `.docker-target/target.toml` with inheritance-chain comments.
 - `--push` switches the build to `docker buildx build --push`, so the image is pushed directly without being loaded into the local Docker image store.
-- `--runtime-cache-root` passes a restored runtime cache directory as the named BuildKit context `cache-host`, so the Dockerfile can consume it with `gki-builder-cache-sync prepare` / `save` without creating an extra packaged cache copy.
-- The image build still finishes with a real `/workspace/.cache` tree in the final image, so downstream CI can benefit from the prewarmed cache on the first run.
+- During image build, AKB creates a sparse ext4 `container_cache.img`, mounts it on `/workspace/.cache`, runs source sync and warmup against that image, then shrinks it for the final image.
+- The final image keeps an empty `/workspace/.cache` mountpoint plus `docker_datas/container_cache.img` for runtime overlay use.
 
 ```bash
 gki-builder docker-build-workspace \
@@ -99,8 +99,8 @@ gki-builder docker-build-workspace \
 - Runs warmup, then removes `.repo` metadata while preserving selected Git projects.
 - Uses the same flattened auto-generated `.docker-target/target.toml` flow as `docker-build-workspace`.
 - `--push` switches the build to `docker buildx build --push`, so the image is pushed directly without being loaded into the local Docker image store.
-- `--runtime-cache-root` passes a restored runtime cache directory as the named BuildKit context `cache-host`, so the Dockerfile can consume it with `gki-builder-cache-sync prepare` / `save` without creating an extra packaged cache copy.
-- The image build still finishes with a real `/workspace/.cache` tree in the final image, so downstream CI can benefit from the prewarmed cache on the first run.
+- During image build, AKB creates and warms an embedded `container_cache.img` instead of consuming an external build cache.
+- The final image keeps an empty `/workspace/.cache` mountpoint plus `docker_datas/container_cache.img` for runtime overlay use.
 
 ```bash
 gki-builder docker-build-snapshot \
@@ -121,6 +121,26 @@ gki-builder docker-run \
   --workspace work \
   --output-root out \
   -- bash -lc 'cd "$GKI_SOURCE_ROOT" && tools/bazel help'
+```
+
+### `runtime-cache-init`
+
+- Explicitly mounts the Docker runtime cache.
+- Reads the baked-in `container_cache.img` and the mounted external `outer-cache.img` delta.
+- Requires enough mount capability inside the container, typically `--privileged` in CI.
+
+```bash
+gki-builder runtime-cache-init
+```
+
+### `runtime-cache-export`
+
+- Explicitly finalizes the Docker runtime cache.
+- Unmounts runtime cache mounts and exports `next-outer-cache.img/json`.
+- Recommended for downstream CI shell flows via `trap 'gki-builder runtime-cache-export || true' EXIT` so export still runs after failures.
+
+```bash
+gki-builder runtime-cache-export
 ```
 
 ### `add-git-safe`

@@ -6,11 +6,11 @@ Docker layout paths are fixed in code:
 
 - work root: `/workspace`
 - AKB runtime root: `/workspace/.akb`
-- Docker metadata root: `/workspace/docker_metadata`
+- Docker runtime data root: `/workspace/docker_datas`
 - cache root: `/workspace/.cache`
 - default output root: `/workspace/out`
 
-The entrypoint loads `/workspace/docker_metadata/gki-builder.env` before executing the requested command.
+The entrypoint loads `/workspace/docker_datas/gki-builder.env` before executing the requested command.
 
 ## Runtime Variables
 
@@ -23,15 +23,20 @@ The entrypoint loads `/workspace/docker_metadata/gki-builder.env` before executi
 - Synced kernel source root inside the container.
 - Usually `/workspace/android-kernel`.
 
-### `GKI_DOCKER_METADATA_ROOT`
+### `GKI_DOCKER_DATAS_ROOT`
 
-- Fixed metadata root for generated Docker metadata.
-- Default: `/workspace/docker_metadata`.
+- Fixed runtime data root for generated Docker metadata and cache images.
+- Default: `/workspace/docker_datas`.
 
 ### `GKI_TARGET_METADATA_ROOT`
 
 - Per-target metadata directory.
-- Default: `/workspace/docker_metadata/targets/${GKI_TARGET_NAME}`.
+- Default: `/workspace/docker_datas/targets/${GKI_TARGET_NAME}`.
+
+### `GKI_SOURCE_MODE`
+
+- Runtime source mode.
+- Current Docker images export `embedded`.
 
 ## Build Metadata Variables
 

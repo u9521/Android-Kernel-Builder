@@ -15,16 +15,16 @@ docker = importlib.import_module("gki_builder.docker")
 
 
 class DockerTests(unittest.TestCase):
-    def test_build_base_image_uses_buildx_when_push_requested(self) -> None:
+    def test_build_base_image_uses_buildx(self) -> None:
         repo_root = Path("/tmp/repo")
         dockerfile = repo_root / "docker" / "base.Dockerfile"
 
         with mock.patch.object(docker, "run_command") as run_command:
-            docker.build_base_image("example:base", repo_root, dockerfile, push=True)
+            docker.build_base_image("example:base", repo_root, dockerfile)
 
         self.assertEqual(
             run_command.call_args.args[0][:4],
-            ["docker", "buildx", "build", "--push"],
+            ["docker", "buildx", "build", "--load"],
         )
         self.assertEqual(run_command.call_args.kwargs["cwd"], repo_root)
 
@@ -53,41 +53,13 @@ class DockerTests(unittest.TestCase):
 
             package_image_context.assert_called_once_with(repo_root, package_root, source_target_file=repo_root / "configs" / "targets" / "sample.toml")
             command = run_command.call_args.args[0]
+            self.assertEqual(command[:4], ["docker", "buildx", "build", "--load"])
+            self.assertIn("--allow", command)
+            self.assertIn("security.insecure", command)
             self.assertIn(str(package_root / "docker" / "workspace.Dockerfile"), command)
             self.assertIn("SOURCE_TARGET_FILE=.docker-target/target.toml", command)
-            self.assertIn("cache-host=" + str(Path(temp_dir) / "empty-cache-host"), command)
             self.assertNotIn("GKI_WORKSPACE_ROOT=/workspace", command)
             self.assertEqual(run_command.call_args.kwargs["cwd"], package_root)
-
-    def test_build_workspace_image_passes_runtime_cache_as_named_build_context(self) -> None:
-        repo_root = Path("/tmp/repo")
-        dockerfile = repo_root / "docker" / "workspace.Dockerfile"
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            package_root = Path(temp_dir) / "context"
-            runtime_cache_root = Path(temp_dir) / "runtime-cache"
-            (package_root / "docker").mkdir(parents=True, exist_ok=True)
-            (package_root / "docker" / "workspace.Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
-            (runtime_cache_root / "bazel").mkdir(parents=True, exist_ok=True)
-            (runtime_cache_root / "bazel" / "state.txt").write_text("cached\n", encoding="utf-8")
-
-            with mock.patch.object(docker, "package_image_context"):
-                with mock.patch("gki_builder.docker.tempfile.TemporaryDirectory") as temporary_directory:
-                    temporary_directory.return_value.__enter__.return_value = temp_dir
-                    temporary_directory.return_value.__exit__.return_value = False
-                    with mock.patch.object(docker, "run_command") as run_command:
-                        docker.build_workspace_image(
-                            "example:workspace",
-                            "example:base",
-                            repo_root / "configs" / "targets" / "sample.toml",
-                            repo_root,
-                            dockerfile,
-                            runtime_cache_root=runtime_cache_root,
-                        )
-
-            command = run_command.call_args.args[0]
-            self.assertIn("--build-context", command)
-            self.assertIn(f"cache-host={runtime_cache_root.resolve()}", command)
 
     def test_build_workspace_image_uses_buildx_when_push_requested(self) -> None:
         repo_root = Path("/tmp/repo")
@@ -143,11 +115,13 @@ class DockerTests(unittest.TestCase):
 
             package_image_context.assert_called_once_with(repo_root, package_root, source_target_file=repo_root / "configs" / "targets" / "sample.toml")
             command = run_command.call_args.args[0]
+            self.assertEqual(command[:4], ["docker", "buildx", "build", "--load"])
+            self.assertIn("--allow", command)
+            self.assertIn("security.insecure", command)
             self.assertIn("SNAPSHOT_GIT_PROJECTS=common,build/kernel", command)
             self.assertIn("example:snapshot", command)
             self.assertIn(str(package_root / "docker" / "snapshot.Dockerfile"), command)
             self.assertIn("SOURCE_TARGET_FILE=.docker-target/target.toml", command)
-            self.assertIn("cache-host=" + str(Path(temp_dir) / "empty-cache-host"), command)
             self.assertEqual(run_command.call_args.kwargs["cwd"], package_root)
 
     def test_build_snapshot_image_uses_buildx_when_push_requested(self) -> None:

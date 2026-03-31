@@ -26,7 +26,11 @@ def sync_source(
     if build_spec is None:
         raise ValueError(f"Unsupported build system in {target.config_path}: {target.build.system}")
     if build_spec.allows_cache_bazel_dir:
-        ensure_directory(cache_root / target.cache.bazel_dir)
+        ensure_directory(_bazel_root(cache_root, target))
+        ensure_directory(_bazel_state_dir(cache_root, target))
+        ensure_directory(_bazel_repository_cache_dir(cache_root, target))
+        ensure_directory(_bazel_disk_cache_dir(cache_root, target))
+        ensure_directory(_kleaf_cache_dir(cache_root, target))
     if build_spec.allows_cache_ccache_dir and target.build.use_ccache:
         ensure_directory(cache_root / target.cache.ccache_dir)
 
@@ -70,6 +74,26 @@ def _target_metadata_root(workspace_root: Path, target: TargetConfig) -> Path | 
     if metadata_dir == layout.docker_target_metadata_relative_dir():
         return layout.docker_target_metadata_root(workspace_root, target.name)
     raise ValueError(f"Unsupported workspace.metadata_dir in {target.config_path}: {metadata_dir}")
+
+
+def _bazel_root(cache_root: Path, target: TargetConfig) -> Path:
+    return cache_root / target.cache.bazel_dir
+
+
+def _bazel_state_dir(cache_root: Path, target: TargetConfig) -> Path:
+    return _bazel_root(cache_root, target) / "state"
+
+
+def _bazel_repository_cache_dir(cache_root: Path, target: TargetConfig) -> Path:
+    return _bazel_root(cache_root, target) / "repo"
+
+
+def _bazel_disk_cache_dir(cache_root: Path, target: TargetConfig) -> Path:
+    return _bazel_root(cache_root, target) / "diskcache"
+
+
+def _kleaf_cache_dir(cache_root: Path, target: TargetConfig) -> Path:
+    return _bazel_root(cache_root, target) / target.cache.kleaf_dir
 
 
 def _repo_init(target: TargetConfig, source_dir: Path, repo_reference_dir: Path) -> None:

@@ -27,7 +27,7 @@ class WorkspaceHelpersTests(unittest.TestCase):
                 name="sample-kleaf",
                 manifest=targets.ManifestConfig(source="remote", url="https://example.com/manifest", branch="common-android15-6.6"),
                 build=targets.BuildConfig(system="kleaf"),
-                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", ccache_dir="ccache"),
+                cache=targets.CacheConfig(repo_dir="repo", bazel_dir="bazel", kleaf_dir="kleaf-out", ccache_dir="ccache"),
                 workspace=targets.WorkspaceConfig(source_dir="android-kernel"),
                 config_path=Path("sample-kleaf.toml"),
             )
@@ -39,6 +39,10 @@ class WorkspaceHelpersTests(unittest.TestCase):
 
             self.assertTrue((cache_root / "repo").exists())
             self.assertTrue((cache_root / "bazel").exists())
+            self.assertTrue((cache_root / "bazel" / "state").exists())
+            self.assertTrue((cache_root / "bazel" / "repo").exists())
+            self.assertTrue((cache_root / "bazel" / "diskcache").exists())
+            self.assertTrue((cache_root / "bazel" / "kleaf-out").exists())
             self.assertFalse((cache_root / "ccache").exists())
 
     def test_sync_source_creates_ccache_for_legacy_only(self) -> None:
