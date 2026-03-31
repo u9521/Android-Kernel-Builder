@@ -35,7 +35,8 @@ def create_workspace_snapshot(
     metadata_dir = ensure_directory(metadata_dir.resolve())
     projects = preserve_git_projects or list(DEFAULT_SNAPSHOT_GIT_PROJECTS)
 
-    with tempfile.TemporaryDirectory(prefix="gki-snapshot-") as temp_dir:
+    temp_root_dir = ensure_directory(layout.temp_root(workspace_root))
+    with tempfile.TemporaryDirectory(prefix="gki-snapshot-", dir=temp_root_dir) as temp_dir:
         temp_root = Path(temp_dir)
         clones: dict[str, Path] = {}
         for project in projects:
@@ -51,7 +52,7 @@ def create_workspace_snapshot(
             if project_path.exists():
                 shutil.rmtree(project_path)
             ensure_directory(project_path.parent)
-            shutil.copytree(clone_path, project_path)
+            shutil.move(str(clone_path), str(project_path))
 
     snapshot = {
         "workspace_root": str(workspace_root),

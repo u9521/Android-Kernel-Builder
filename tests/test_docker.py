@@ -12,6 +12,7 @@ from unittest import mock
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src").resolve()))
 
 docker = importlib.import_module("gki_builder.docker")
+layout = importlib.import_module("gki_builder.layout")
 
 
 class DockerTests(unittest.TestCase):
@@ -51,6 +52,10 @@ class DockerTests(unittest.TestCase):
                             dockerfile,
                         )
 
+            temporary_directory.assert_called_once_with(
+                prefix="gki-image-package-",
+                dir=layout.temp_root(repo_root),
+            )
             package_image_context.assert_called_once_with(repo_root, package_root, source_target_file=repo_root / "configs" / "targets" / "sample.toml")
             command = run_command.call_args.args[0]
             self.assertEqual(command[:4], ["docker", "buildx", "build", "--load"])
@@ -113,6 +118,10 @@ class DockerTests(unittest.TestCase):
                             ["common", "build/kernel"],
                         )
 
+            temporary_directory.assert_called_once_with(
+                prefix="gki-image-package-",
+                dir=layout.temp_root(repo_root),
+            )
             package_image_context.assert_called_once_with(repo_root, package_root, source_target_file=repo_root / "configs" / "targets" / "sample.toml")
             command = run_command.call_args.args[0]
             self.assertEqual(command[:4], ["docker", "buildx", "build", "--load"])

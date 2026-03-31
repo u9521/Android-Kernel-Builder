@@ -9,6 +9,7 @@ import tempfile
 from . import layout
 from .global_config import load_global_config
 from .image_package import package_image_context
+from .utils import ensure_directory
 from .utils import run_command
 
 
@@ -50,7 +51,8 @@ def build_workspace_image(
     *,
     push: bool = False,
 ) -> None:
-    with tempfile.TemporaryDirectory(prefix="gki-image-package-") as temp_dir:
+    temp_root = ensure_directory(layout.temp_root(repo_root))
+    with tempfile.TemporaryDirectory(prefix="gki-image-package-", dir=temp_root) as temp_dir:
         package_root = Path(temp_dir) / "context"
         package_image_context(repo_root, package_root, source_target_file=source_target_file)
         packaged_dockerfile = package_root / dockerfile.relative_to(repo_root)
@@ -83,7 +85,8 @@ def build_snapshot_image(
 ) -> None:
     global_config = load_global_config(repo_root)
     projects = snapshot_git_projects or list(global_config.snapshot_git_projects)
-    with tempfile.TemporaryDirectory(prefix="gki-image-package-") as temp_dir:
+    temp_root = ensure_directory(layout.temp_root(repo_root))
+    with tempfile.TemporaryDirectory(prefix="gki-image-package-", dir=temp_root) as temp_dir:
         package_root = Path(temp_dir) / "context"
         package_image_context(repo_root, package_root, source_target_file=source_target_file)
         packaged_dockerfile = package_root / dockerfile.relative_to(repo_root)

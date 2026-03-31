@@ -19,6 +19,7 @@ AKB_VENV_DIR_NAME = "venv"
 AKB_BIN_DIR_NAME = "bin"
 
 CACHE_DIR_NAME = ".cache"
+TEMP_DIR_NAME = ".temp"
 OUTPUT_DIR_NAME = "out"
 CCACHE_TOOLS_DIR_NAME = ".ccache-tools"
 CCACHE_CLANG_LINK_NAME = "clang"
@@ -84,6 +85,10 @@ def akb_bin_root(work_root: Path) -> Path:
 
 def cache_root(work_root: Path) -> Path:
     return work_root / CACHE_DIR_NAME
+
+
+def temp_root(work_root: Path) -> Path:
+    return akb_root(work_root) / TEMP_DIR_NAME
 
 
 def output_root(work_root: Path) -> Path:

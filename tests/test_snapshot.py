@@ -32,6 +32,7 @@ class SnapshotTests(unittest.TestCase):
             (source_dir / ".repo" / "manifests").mkdir(parents=True, exist_ok=True)
 
             self._init_git_repo(common_dir, "README.md", "common")
+            self._add_git_symlink(common_dir, "README.link", Path("README.md"))
             self._convert_to_gitfile(common_dir, temp_root / "gitdirs" / "common.git")
             self._init_git_repo(tools_dir, "BUILD.bazel", "tools")
             self._convert_to_gitfile(tools_dir, temp_root / "gitdirs" / "tools.git")
@@ -42,6 +43,9 @@ class SnapshotTests(unittest.TestCase):
             self.assertFalse((source_dir / ".repo").exists())
             self.assertTrue((common_dir / ".git").is_dir())
             self.assertFalse((tools_dir / ".git").exists())
+            self.assertTrue((workspace_root / ".akb" / ".temp").is_dir())
+            self.assertTrue((common_dir / "README.link").is_symlink())
+            self.assertEqual(Path(os.readlink(common_dir / "README.link")), Path("README.md"))
 
             head = self._git(common_dir, "rev-parse", "HEAD").strip()
             self.assertTrue(head)
@@ -168,6 +172,21 @@ source_dir = "android-kernel"
         gitdir.parent.mkdir(parents=True, exist_ok=True)
         original_git_dir.rename(gitdir)
         (worktree / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+
+    def _add_git_symlink(self, repo_dir: Path, link_name: str, target: Path) -> None:
+        link_path = repo_dir / link_name
+        link_path.symlink_to(target)
+        env = os.environ.copy()
+        env.update(
+            {
+                "GIT_AUTHOR_NAME": "Test User",
+                "GIT_AUTHOR_EMAIL": "test@example.com",
+                "GIT_COMMITTER_NAME": "Test User",
+                "GIT_COMMITTER_EMAIL": "test@example.com",
+            }
+        )
+        self._git(repo_dir, "add", link_name)
+        self._git(repo_dir, "commit", "-m", f"add {link_name}", env=env)
 
     def _git(self, cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
         import subprocess
