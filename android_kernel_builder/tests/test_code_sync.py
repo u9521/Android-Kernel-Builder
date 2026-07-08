@@ -2,6 +2,7 @@
 # Copyright (C) 2026 u9521
 
 import importlib
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -89,6 +90,45 @@ class CodeSyncHelpersTests(unittest.TestCase):
             self.assertTrue((cache_root / "repo").exists())
             self.assertFalse((cache_root / "bazel").exists())
             self.assertFalse((cache_root / "ccache").exists())
+
+    def test_sync_source_prints_source_root_entry_sizes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_dir = temp_root / "source-code" / "sample-kleaf"
+            cache_root = temp_root / "cache" / "sample-kleaf"
+            common_dir = source_dir / "common"
+            tools_dir = source_dir / "tools"
+            common_dir.mkdir(parents=True, exist_ok=True)
+            tools_dir.mkdir(parents=True, exist_ok=True)
+            cache_root.mkdir(parents=True, exist_ok=True)
+            (common_dir / "kernel.bin").write_bytes(b"a" * 2048)
+            (tools_dir / "bazel").write_bytes(b"b" * 1024)
+            (source_dir / "README.md").write_bytes(b"c" * 512)
+
+            target = targets.TargetConfig(
+                name="sample-kleaf",
+                manifest=targets.ManifestConfig(source="remote", url="https://example.com/manifest", branch="common-android15-6.6"),
+                build=targets.BuildConfig(system="kleaf"),
+                config_path=Path("sample-kleaf.toml"),
+            )
+
+            stdout = io.StringIO()
+            with mock.patch.object(code_sync_repo, "_repo_init"):
+                with mock.patch.object(code_sync_repo, "_auto_fix_remote_deprecated_branch", return_value=None):
+                    with mock.patch.object(code_sync_sync, "run_command"):
+                        with mock.patch("sys.stdout", stdout):
+                            code_sync.sync_source(target, source_dir, cache_root, jobs=1)
+
+            output = stdout.getvalue()
+            self.assertIn(f"source root disk usage: {source_dir.resolve()}", output)
+            self.assertIn("common/", output)
+            self.assertIn("2.0 KiB", output)
+            self.assertIn("tools/", output)
+            self.assertIn("1.0 KiB", output)
+            self.assertIn("README.md", output)
+            self.assertIn("512 B", output)
+            self.assertLess(output.index("common/"), output.index("tools/"))
+            self.assertLess(output.index("tools/"), output.index("README.md"))
 
     def test_detects_deprecated_branch(self) -> None:
         output = "deadbeef\trefs/heads/deprecated/android14-6.1\n"

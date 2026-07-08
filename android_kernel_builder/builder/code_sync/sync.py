@@ -8,7 +8,7 @@ from pathlib import Path
 from .. import layout
 from ..build_systems import get_build_system_spec
 from ..targets import TargetConfig
-from ..utils import ensure_directory, run_command, sha256_file, write_json
+from ..utils import directory_size_bytes, ensure_directory, format_bytes, run_command, sha256_file, write_json
 from . import repo
 
 
@@ -41,6 +41,7 @@ def sync_source(
         repo._repo_sync_command(target, jobs),
         cwd=source_dir,
     )
+    _print_source_root_entry_sizes(source_dir)
 
     metadata = {
         "target": target.name,
@@ -61,3 +62,17 @@ def sync_source(
         metadata_root = ensure_directory(metadata_dir)
         write_json(metadata_root / "workspace.json", metadata)
     return metadata
+
+
+def _print_source_root_entry_sizes(source_dir: Path) -> None:
+    entries: list[tuple[str, int]] = []
+    for child in source_dir.iterdir():
+        if child.is_dir():
+            entries.append((f"{child.name}/", directory_size_bytes(child)))
+            continue
+        if child.is_file():
+            entries.append((child.name, child.stat().st_size))
+
+    print(f"source root disk usage: {source_dir}", flush=True)
+    for name, size_bytes in sorted(entries, key=lambda entry: entry[1], reverse=True):
+        print(f"  {name:<40} {format_bytes(size_bytes)}", flush=True)
