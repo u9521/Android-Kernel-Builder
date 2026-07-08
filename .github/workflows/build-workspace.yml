@@ -14,10 +14,15 @@ on:
         description: Image tag suffix
         required: true
         default: android15-6.6-latest
+      push_image:
+        description: Push built images to GHCR
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   build:
-    name: Build and push ${{ matrix.image_name }} image
+    name: Build ${{ matrix.image_name }} image
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -35,21 +40,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install gki-builder
-        run: python3 -m pip install -e .
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Prepare host AKB environment
-        run: |
-          set -euo pipefail
-          rm -rf .akb
-          mkdir -p .akb/targets
-          cat > .akb/config.toml <<'EOF'
-          version = 1
-          EOF
-          ln -s "$PWD/configs/targets" .akb/targets/configs
-          ln -s "$PWD/manifests" .akb/targets/manifests
+      - name: Install akb
+        run: uv sync --dev
 
       - name: Login to GHCR
+        if: ${{ inputs.push_image }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -64,11 +62,11 @@ jobs:
       - name: Validate source target definition
         run: |
           set -euo pipefail
-          source_target_file="configs/targets/${{ inputs.target }}.toml"
+          source_target_file="android_kernel_builder/configs/targets/${{ inputs.target }}.toml"
           if [ ! -f "$source_target_file" ]; then
             echo "::error::Missing source target definition: $source_target_file"
             echo "Available configs:"
-            ls configs/targets/*.toml
+            ls android_kernel_builder/configs/targets/*.toml
             exit 1
           fi
 
@@ -78,40 +76,48 @@ jobs:
           set -euo pipefail
           start_ts=$(date +%s)
           image_ref="ghcr.io/${{ github.repository_owner }}/${{ matrix.image_repo }}:${{ inputs.tag }}"
+          push_args=()
+
+          if [ "${{ inputs.push_image }}" = "true" ]; then
+            push_args+=(--push)
+          fi
 
           if [ "${{ matrix.image_name }}" = "workspace" ]; then
-            gki-builder docker-build-workspace \
+            uv run build-docker build-workspace \
               --tag "$image_ref" \
               --base-image "ghcr.io/${{ github.repository_owner }}/gki-base:bookworm" \
               --target "${{ inputs.target }}" \
-              --push
+              "${push_args[@]}"
           else
-            gki-builder docker-build-snapshot \
+            uv run build-docker build-snapshot \
               --tag "$image_ref" \
               --base-image "ghcr.io/${{ github.repository_owner }}/gki-base:bookworm" \
               --target "${{ inputs.target }}" \
               --snapshot-git-projects "${{ matrix.snapshot_git_projects }}" \
-              --push
+              "${push_args[@]}"
           fi
 
           end_ts=$(date +%s)
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
           echo "build_duration_seconds=$((end_ts - start_ts))" >> "$GITHUB_OUTPUT"
+          echo "push_requested=${{ inputs.push_image }}" >> "$GITHUB_OUTPUT"
 
       - name: Append build summary
         if: always()
         env:
           IMAGE_REF: ${{ steps.build_image.outputs.image_ref }}
           BUILD_DURATION_SECONDS: ${{ steps.build_image.outputs.build_duration_seconds }}
-          SOURCE_TARGET_FILE: configs/targets/${{ inputs.target }}.toml
+          SOURCE_TARGET_FILE: android_kernel_builder/configs/targets/${{ inputs.target }}.toml
           TARGET_INPUT: ${{ inputs.target }}
           BUILD_STEP_OUTCOME: ${{ steps.build_image.outcome }}
+          PUSH_REQUESTED: ${{ steps.build_image.outputs.push_requested }}
         run: |
           set -euo pipefail
-          python3 scripts/write-ci-build-summary.py \
+          uv run python android_kernel_builder/scripts/write-ci-build-summary.py \
             --image-ref "$IMAGE_REF" \
             --source-target-file "$SOURCE_TARGET_FILE" \
             --target-input "$TARGET_INPUT" \
             --build-duration-seconds "$BUILD_DURATION_SECONDS" \
             --build-step-outcome "$BUILD_STEP_OUTCOME" \
+            --push-requested "$PUSH_REQUESTED" \
             --summary-file "$GITHUB_STEP_SUMMARY"

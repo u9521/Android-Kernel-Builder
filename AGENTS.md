@@ -4,10 +4,10 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 
 ## Scope
 
-- Python 3.11+ project with CLI entry point `gki-builder`.
+- Python 3.11+ project with CLI entry point `akb`.
 - Two execution modes:
-  - host mode rooted at `{work}/.akb`
-  - docker mode rooted at `/workspace`
+  - commands run from the project root as the work root
+  - Docker runtime commands run from `/workspace`, which is the project root inside images
 - Prefer small, behavior-preserving edits unless the task clearly needs a larger refactor.
 
 ## Repository Rules Status
@@ -19,61 +19,60 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 
 ## Project Layout
 
-- Source package: `src/gki_builder/`
-- Tests: `tests/`
-- Checked-in target inputs: `configs/targets/`
-- Checked-in manifests: `manifests/`
-- Dockerfiles and entrypoint: `docker/`
-- Reference docs: `docs/`
+- Source package: `android_kernel_builder/builder/`
+- Tests: `android_kernel_builder/tests/`
+- Checked-in target inputs: `android_kernel_builder/configs/targets/`
+- Checked-in manifests: `android_kernel_builder/configs/manifests/`
+- Dockerfiles and entrypoint: `android_kernel_builder/docker/`
+- Reference docs: `android_kernel_builder/docs/`
 
 ## Setup Commands
 
-- Install editable package: `python3 -m pip install -e .`
-- Optional import-path setup: `export PYTHONPATH="$(pwd)/src${PYTHONPATH:+:${PYTHONPATH}}"`
-- Initialize a host AKB environment: `bash install.sh`
+- Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Install editable package with dev deps: `uv sync --dev`
 
 ## Common Commands
 
-- CLI help: `python3 -m gki_builder.cli --help`
-- Show target: `python3 -m gki_builder.cli show-target --target android15-6.6`
-- Sync source: `python3 -m gki_builder.cli sync-source --target android15-6.6`
-- Build target: `python3 -m gki_builder.cli build --target android15-6.6 --output-root out`
-- Warm caches: `python3 -m gki_builder.cli warmup-build --target android15-6.6 --output-root out`
-- Build Docker base image: `python3 -m gki_builder.cli docker-build-base --tag ghcr.io/<owner>/gki-base:bookworm`
-- Build Docker workspace image: `python3 -m gki_builder.cli docker-build-workspace --tag <tag> --base-image <base> --target android15-6.6`
-- Build Docker snapshot image: `python3 -m gki_builder.cli docker-build-snapshot --tag <tag> --base-image <base> --target android15-6.6`
+- CLI help: `uv run akb --help`
+- Show target: `uv run show-target --target android15-6.6`
+- Sync source: `uv run sync-source --target android15-6.6`
+- Build target: `uv run build --target android15-6.6`
+- Warm caches: `uv run warmup-build --target android15-6.6`
+- Build Docker base image: `uv run build-docker build-base --tag ghcr.io/<owner>/gki-base:bookworm`
+- Build Docker workspace image: `uv run build-docker build-workspace --tag <tag> --base-image <base> --target android15-6.6`
+- Build Docker snapshot image: `uv run build-docker build-snapshot --tag <tag> --base-image <base> --target android15-6.6`
 
 ## Test Commands
 
-- Full suite: `python3 -m unittest`
-- Focused subset: `python3 -m unittest tests.test_config tests.test_environment tests.test_target_store`
-- Single module: `python3 -m unittest tests.test_install_script`
-- Single class: `python3 -m unittest tests.test_build.BuildUsageTests`
-- Single test: `python3 -m unittest tests.test_build.BuildUsageTests.test_warmup_kernel_uses_bazel_build_for_warmup_target`
+- Full suite: `uv run python -m unittest discover -s android_kernel_builder/tests`
+- Focused subset: `uv run python -m unittest discover -s android_kernel_builder/tests -p 'test_target_store.py'`
+- Single module: `uv run python -m unittest android_kernel_builder.tests.test_install_script`
+- Single class: `uv run python -m unittest android_kernel_builder.tests.test_build.BuildUsageTests`
+- Single test: `uv run python -m unittest android_kernel_builder.tests.test_build.BuildUsageTests.test_warmup_kernel_uses_bazel_build_for_warmup_target`
 
 ## Lint / Type Check
 
-- Preferred static check if installed: `pyright`
-- `pyrightconfig.json` includes both `src` and `tests`.
+- Preferred static check: `pyright` (install separately, e.g. `npm install -g pyright`)
+- Pyright configuration lives in `pyproject.toml` under `[tool.pyright]`.
 - No repo-local Ruff/Black/isort/Flake8 config exists right now.
 
 ## Change-Specific Verification
 
 - Start with the smallest relevant `unittest` target.
-- If you change CLI argument handling, run `python3 -m unittest tests.test_cli`.
-- If you change host/docker environment or layout resolution, run:
-  - `python3 -m unittest tests.test_layout tests.test_environment tests.test_config tests.test_active_target tests.test_target_store`
+- If you change CLI argument handling, run `uv run python -m unittest android_kernel_builder.tests.test_cli`.
+- If you change host/docker layout resolution, run:
+  - `uv run python -m unittest android_kernel_builder.tests.test_layout android_kernel_builder.tests.test_target_store`
 - If you change Docker packaging or runtime layout, run:
-  - `python3 -m unittest tests.test_image_env tests.test_image_package tests.test_docker tests.test_snapshot`
+  - `uv run python -m unittest android_kernel_builder.tests.test_image_env android_kernel_builder.tests.test_image_package android_kernel_builder.tests.test_docker android_kernel_builder.tests.test_snapshot`
 
 ## Architecture Notes
 
 - Keep host and docker behavior clearly separated.
 - Do not assume the build system enum is fixed to current values; design parser/validation/branching so additional build systems can be introduced without broad rewrites.
-- Host discovery walks upward until `.akb/config.toml` is found.
-- Docker runtime always uses the fixed root `/workspace`.
-- Host targets live under `.akb/targets/configs/<name>.toml`.
-- Docker runtime uses `.akb/active-target.toml`.
+- Commands use the current working directory as the work root.
+- Docker runtime always runs from `/workspace`.
+- Target configs live under `android_kernel_builder/configs/targets/<name>.toml`.
+- Docker runtime uses `AKB_TARGET` and the same target config layout under `/workspace`.
 - Metadata directories are fixed by layout constants and must not be user-configurable.
 
 ## File Creation Rules
@@ -90,8 +89,7 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
   2. standard library imports
   3. local package imports
 - Use explicit imports; avoid wildcard imports.
-- Use relative imports inside `gki_builder`.
-- In tests, follow the existing pattern of inserting `src` into `sys.path` and using `importlib.import_module(...)`.
+- Use relative imports inside `android_kernel_builder.builder`.
 
 ## Formatting
 
@@ -126,7 +124,7 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 
 ## Subprocess and Environment
 
-- Prefer `run_command()` from `src/gki_builder/utils.py` for shelling out.
+- Prefer `run_command()` from `android_kernel_builder/builder/utils.py` for shelling out.
 - Pass structured argument lists, not shell strings.
 - Use explicit `cwd=Path(...)` and environment dictionaries instead of `os.chdir()`.
 
@@ -134,7 +132,7 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 
 - Treat host and docker layout paths as fixed, not configurable.
 - Reject absolute paths or `..` segments when values must stay inside the AKB root.
-- Prefer helpers from `src/gki_builder/layout.py` instead of duplicating path logic.
+- Prefer helpers from `android_kernel_builder/builder/layout.py` instead of duplicating path logic.
 
 ## Testing Style
 
@@ -146,11 +144,11 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 
 ## Docs and CLI Changes
 
-- If you change commands, flags, or workflow shape, update `README.md`, `docs/gki-builder-cli.md`, and any affected docs.
+- If you change commands, flags, or workflow shape, update `README.md`, `android_kernel_builder/docs/akb-cli.md`, and any affected docs.
 - Keep terminology aligned with the current model:
   - use `sync-source`, not `prepare-workspace`
   - use `source target file` for repo-side Docker build inputs
-  - use `active target` for embedded Docker runtime config
+  - use `AKB_TARGET` for embedded Docker runtime target selection
 
 ## Agent Tips
 

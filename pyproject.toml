@@ -1,24 +1,27 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "gki-builder"
-version = "0.1.0"
+name = "android-kernel-builder"
+version = "0.0.1"
 description = "Reusable GKI workspace and build orchestration"
 readme = "README.md"
-license = {file = "LICENSE"}
 requires-python = ">=3.11"
+license-files = ["LICENSE"]
+authors = [{ name = "u9521" }]
 dependencies = []
-classifiers = [
-  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
-]
 
 [project.scripts]
-gki-builder = "gki_builder.cli:main"
+akb = "android_kernel_builder.builder.cli:main"
+show-target = "android_kernel_builder.builder.commands.show_target:main"
+sync-source = "android_kernel_builder.builder.commands.sync_source:main"
+build = "android_kernel_builder.builder.commands.build:main"
+warmup-build = "android_kernel_builder.builder.commands.warmup_build:main"
+build-docker = "android_kernel_builder.builder.commands.docker:main"
+cache = "android_kernel_builder.builder.commands.cache:main"
+tools = "android_kernel_builder.builder.commands.tools:main"
+image-env = "android_kernel_builder.builder.commands.image_env:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[build-system]
+requires = ["uv_build>=0.11.27,<0.12"]
+build-backend = "uv_build"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.uv.build-backend]
+module-root = "."
