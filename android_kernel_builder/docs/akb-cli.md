@@ -45,6 +45,8 @@ Runs `repo init` and `repo sync` for the selected target.
 uv run sync-source --target android15-6.6
 ```
 
+After sync completes, the command prints the selected source root and direct source-root entry sizes, including both directories and files.
+
 ### `build`
 
 Builds the configured kernel target and writes outputs under `out/<target>/<dist_dir>`.
@@ -80,6 +82,8 @@ uv run build-docker build-workspace \
   --target android15-6.6
 ```
 
+The image build warms caches, removes everything under `/workspace/source-code/<target>/common` except `.git`, removes warmup outputs and cache contents, then prints the final workspace disk usage report.
+
 ### `build-docker build-snapshot`
 
 Builds a snapshot-oriented one-image-one-target CI image.
@@ -90,6 +94,16 @@ uv run build-docker build-snapshot \
   --base-image ghcr.io/<owner>/gki-base:bookworm \
   --target android15-6.6 \
   --snapshot-git-projects common
+```
+
+The image build snapshots the requested Git projects, warms caches, applies the same final `common` cleanup, then prints the final workspace disk usage report.
+
+### `print-usage-report`
+
+Prints the current workspace disk usage report for the selected target. The target is resolved from `AKB_TARGET` or the only selectable target config in the current workspace.
+
+```bash
+uv run print-usage-report
 ```
 
 ### `build-docker run`

@@ -85,3 +85,5 @@ Under `/workspace/docker_datas/targets/<target>`:
 - `disk-usage.json`: written after `uv run build` or `uv run warmup-build`
 - `warmup-outputs.json`: written after `uv run warmup-build` when a warmup target is configured
 - `snapshot.json`: written by snapshot image generation
+
+During workspace and snapshot image builds, final cleanup removes every direct entry under `/workspace/source-code/<target>/common` except `.git`, then runs `uv run print-usage-report` so the build log shows the final retained workspace disk usage.

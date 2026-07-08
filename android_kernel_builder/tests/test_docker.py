@@ -14,6 +14,9 @@ docker_runtime = importlib.import_module("android_kernel_builder.builder.build_d
 layout = importlib.import_module("android_kernel_builder.builder.layout")
 
 
+COMMON_CLEANUP_COMMAND = 'find "/workspace/source-code/${AKB_TARGET}/common" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +'
+
+
 class DockerTests(unittest.TestCase):
     def test_build_base_image_uses_buildx(self) -> None:
         repo_root = Path("/tmp/repo")
@@ -160,6 +163,19 @@ class DockerTests(unittest.TestCase):
             run_command.call_args.args[0][:4],
             ["docker", "buildx", "build", "--push"],
         )
+
+    def test_workspace_and_snapshot_images_cleanup_common_before_final_usage_report(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        dockerfiles = [
+            repo_root / "docker" / "workspace.Dockerfile",
+            repo_root / "docker" / "snapshot.Dockerfile",
+        ]
+
+        for dockerfile in dockerfiles:
+            content = dockerfile.read_text(encoding="utf-8")
+            self.assertIn(COMMON_CLEANUP_COMMAND, content)
+            self.assertLess(content.index(COMMON_CLEANUP_COMMAND), content.index("uv run print-usage-report"))
+            self.assertLess(content.index("mkdir -pv /workspace/docker_datas/outerimage"), content.index("uv run print-usage-report"))
 
     def test_run_container_mounts_cache_and_output_under_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

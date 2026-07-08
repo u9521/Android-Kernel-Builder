@@ -27,11 +27,13 @@ RUN --security=insecure . /workspace/docker_datas/akb.env \
         --snapshot-git-projects ${SNAPSHOT_GIT_PROJECTS} \
     && uv run warmup-build \
     && uv run cache pack-base \
+    && find "/workspace/source-code/${AKB_TARGET}/common" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + \
     && rm -rf "/workspace/out/${AKB_TARGET}" \
         "/workspace/source-code/${AKB_TARGET}/out" \
     && rm -rvf "/workspace/cache/${AKB_TARGET}" \
     && mkdir -pv "/workspace/cache/${AKB_TARGET}" \
-    && mkdir -pv /workspace/docker_datas/outerimage
+    && mkdir -pv /workspace/docker_datas/outerimage \
+    && uv run print-usage-report
 
 WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/akb-entrypoint"]

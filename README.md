@@ -63,6 +63,8 @@ Sync source for a host target:
 uv run sync-source --target android15-6.6
 ```
 
+After `repo sync` completes, the command prints the selected source root and the size of each direct file or directory under it.
+
 Build a host target:
 
 ```bash
@@ -84,6 +86,8 @@ uv run build-docker build-workspace \
   --target android15-6.6
 ```
 
+During final image cleanup, this removes everything under `/workspace/source-code/<target>/common` except `.git`, removes warmup outputs and cache contents, then prints the final workspace disk usage report.
+
 Build and push the workspace image directly without loading it into the local Docker image store:
 
 ```bash
@@ -102,6 +106,14 @@ uv run build-docker build-snapshot \
   --base-image ghcr.io/<owner>/gki-base:bookworm \
   --target android15-6.6 \
   --snapshot-git-projects common
+```
+
+Snapshot images apply the same final cleanup and disk usage report after preserving the requested Git projects.
+
+Print the current workspace disk usage report:
+
+```bash
+uv run print-usage-report
 ```
 
 Run a built image:
@@ -138,6 +150,8 @@ This command updates both global and system `safe.directory` scopes.
 - The entrypoint loads `/workspace/docker_datas/akb.env`.
 - That env file exports target, build, and manifest metadata for downstream CI scripts.
 - Workspace images run `uv run sync-source`, create a sparse `container_cache.img`, mount it on `/workspace/cache/<target>`, then run `uv run warmup-build` during image build and remove warmup outputs before the final image layer completes.
+- Workspace and snapshot images remove every direct entry under `/workspace/source-code/<target>/common` except `.git` before the final image layer completes, reducing retained source checkout size while keeping the project Git history available.
+- Workspace and snapshot images run `uv run print-usage-report` after final cleanup so build logs include the final retained workspace disk usage.
 - `warmup-build` exports warmup outputs to `<output-root>/<dist_dir>` when `build.warmup_target` is configured.
 - Snapshot images run snapshot pruning before `uv run warmup-build`, preserving selected Git projects while removing `.repo` metadata.
 - After snapshot pruning removes `.repo`, downstream flows should use Git commands inside preserved project directories instead of `repo` commands.

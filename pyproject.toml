@@ -18,6 +18,7 @@ build-docker = "android_kernel_builder.builder.commands.docker:main"
 cache = "android_kernel_builder.builder.commands.cache:main"
 tools = "android_kernel_builder.builder.commands.tools:main"
 image-env = "android_kernel_builder.builder.commands.image_env:main"
+print-usage-report = "android_kernel_builder.builder.commands.usage_report:main"
 
 [build-system]
 requires = ["uv_build>=0.11.27,<0.12"]

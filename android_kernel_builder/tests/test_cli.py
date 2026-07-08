@@ -14,6 +14,7 @@ cli = importlib.import_module("android_kernel_builder.builder.cli")
 build_command = importlib.import_module("android_kernel_builder.builder.commands.build")
 cache_command = importlib.import_module("android_kernel_builder.builder.commands.cache")
 docker_command = importlib.import_module("android_kernel_builder.builder.commands.docker")
+usage_report_command = importlib.import_module("android_kernel_builder.builder.commands.usage_report")
 sync_source_command = importlib.import_module("android_kernel_builder.builder.commands.sync_source")
 targets = importlib.import_module("android_kernel_builder.builder.targets")
 tools_command = importlib.import_module("android_kernel_builder.builder.commands.tools")
@@ -77,6 +78,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(build_kernel.call_args.args[1], work_root / "source-code/android15-6.6")
         self.assertEqual(build_kernel.call_args.args[2], work_root / "cache/android15-6.6")
         self.assertEqual(build_kernel.call_args.args[3], work_root / "out/android15-6.6")
+
+    def test_print_usage_report_uses_current_directory_target_paths(self) -> None:
+        args = usage_report_command.build_parser().parse_args([])
+        target = _target("android15-6.6")
+        report = {"target": "android15-6.6", "sections": {}}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_root = Path(temp_dir)
+            with mock.patch.object(usage_report_command.Path, "cwd", return_value=work_root):
+                with mock.patch.object(usage_report_command, "resolve_target", return_value=target):
+                    with mock.patch.object(usage_report_command, "analyze_workspace_usage", return_value=report) as analyze_workspace_usage:
+                        with mock.patch.object(usage_report_command, "print_usage_report") as print_usage_report:
+                            result = args.handler(args)
+
+        self.assertEqual(result, 0)
+        analyze_workspace_usage.assert_called_once_with(
+            target,
+            work_root / "source-code/android15-6.6",
+            work_root / "cache/android15-6.6",
+            work_root / "out/android15-6.6",
+        )
+        print_usage_report.assert_called_once_with(report)
 
     def test_docker_build_workspace_passes_fixed_dockerfile_and_push(self) -> None:
         args = docker_command.build_parser().parse_args([

@@ -28,7 +28,8 @@ RUN --security=insecure . /workspace/docker_datas/akb.env \
         "/workspace/source-code/${AKB_TARGET}/out" \
     && rm -rf "/workspace/cache/${AKB_TARGET}" \
     && mkdir -pv "/workspace/cache/${AKB_TARGET}" \
-    && mkdir -pv /workspace/docker_datas/outerimage
+    && mkdir -pv /workspace/docker_datas/outerimage \
+    && uv run print-usage-report
 
 WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/akb-entrypoint"]
