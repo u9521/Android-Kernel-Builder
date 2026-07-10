@@ -7,8 +7,7 @@ LABEL org.opencontainers.image.description="Minimal environment for building GKI
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    PATH=/root/.local/bin:${PATH}
+    LC_ALL=C.UTF-8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -30,15 +29,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     util-linux \
     xz-utils \
     zip \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo \
     && chmod +x /usr/local/bin/repo \
     && printf 'repo version: ' \
-    && repo --version
-
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && uv --version
+    && repo --version \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && ln -s /root/.local/bin/uv /usr/local/bin/uv \
+    && ln -s /root/.local/bin/uvx /usr/local/bin/uvx \
+    && uv --version \
+    && uvx --version
 
 WORKDIR /workspace
 

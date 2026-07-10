@@ -28,9 +28,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image_name: workspace
-            image_repo: gki-workspace
-            snapshot_git_projects: ""
+          # - image_name: workspace
+          #   image_repo: gki-workspace
+          #   snapshot_git_projects: ""
           - image_name: snapshot
             image_repo: gki-snapshot
             snapshot_git_projects: common

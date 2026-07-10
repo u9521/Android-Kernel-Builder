@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 u9521
 
-ARG BASE_IMAGE=ghcr.io/example/gki-base:latest
+ARG BASE_IMAGE=ghcr.io/u9521/gki-base:latest
 FROM ${BASE_IMAGE}
 
 ARG SOURCE_TARGET_FILE=android_kernel_builder/configs/targets/android15-6.6.toml
