@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 from . import layout
-from .build_systems import kleaf
-from .targets import TargetConfig
+from .core.build.engines import kleaf
+from .core.config import KleafBuildConfig, TargetConfig
 from .utils import directory_size_bytes, ensure_directory, format_bytes, write_json
 
 
@@ -30,7 +30,7 @@ def write_warmup_outputs(
         metadata_root / layout.WARMUP_OUTPUTS_FILE_NAME,
         {
             "target": target.name,
-            "warmup_target": target.build.warmup_target,
+            "warmup_target": target.build.warmup_target if isinstance(target.build, KleafBuildConfig) else None,
             "output_dir": str(output_dir),
             "files": exported_files,
         },
@@ -48,10 +48,10 @@ def analyze_workspace_usage(
     repo_metadata_dir = source_dir / ".repo"
     repo_reference_dir = layout.target_repo_cache_root(cache_root).resolve()
     bazel_root = layout.target_bazel_cache_root(cache_root).resolve()
-    bazel_state_dir = kleaf.bazel_output_base_path(cache_root, target)
-    bazel_repo_dir = kleaf.bazel_repository_cache_path(cache_root, target)
-    bazel_disk_cache_dir = kleaf.bazel_disk_cache_path(cache_root, target)
-    kleaf_cache_dir = kleaf.kleaf_cache_dir_path(cache_root, target)
+    bazel_state_dir = kleaf.bazel_output_base_path(cache_root)
+    bazel_repo_dir = kleaf.bazel_repository_cache_path(cache_root)
+    bazel_disk_cache_dir = kleaf.bazel_disk_cache_path(cache_root)
+    kleaf_cache_dir = kleaf.kleaf_cache_dir_path(cache_root)
     ccache_dir = layout.target_ccache_cache_root(cache_root).resolve()
 
     source_total = directory_size_bytes(source_dir)

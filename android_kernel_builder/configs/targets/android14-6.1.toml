@@ -1,6 +1,5 @@
 name = "android14-6.1"
 extends = "kleaf-base"
 
-[manifest]
+[repo]
 branch = "common-android14-6.1"
-

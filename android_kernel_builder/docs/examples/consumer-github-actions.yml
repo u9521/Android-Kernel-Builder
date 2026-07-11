@@ -40,8 +40,8 @@ jobs:
 
       # Pull the image that already contains synced source, embedded target
       # metadata, and the baked-in base cache image.
-      - name: Pull pre-warmed workspace image
-        run: docker pull ghcr.io/<owner>/gki-workspace:android15-6.6-latest
+      - name: Pull pre-warmed snapshot image
+        run: docker pull ghcr.io/<owner>/gki-snapshot:android15-6.6-latest
 
       # Run the downstream build inside the container.
       #
@@ -72,18 +72,19 @@ jobs:
             -v "$PWD":"$DOWNSTREAM_ROOT" \
             -v "$PWD/.outer-cache":/workspace/docker_datas/outerimage \
             -v "$PWD/out":/workspace/out \
-            ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
+            ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
             bash -lc '
               set -euo pipefail
 
               # Always finalize the build cache on shell exit so loop mounts
               # are cleaned up and the newest delta cache is exported even if
               # patching or the build command fails.
-              trap "uv run cache export || true" EXIT
+              trap "uv run akb cache export || true" EXIT
 
-              uv run cache init
+              uv run akb cache init
+              git -C "$AKB_SOURCE_ROOT" reset --hard HEAD
               git -C "$AKB_SOURCE_ROOT" apply "$DOWNSTREAM_ROOT/patches/my-change.patch"
-              uv run build
+              uv run akb build
             '
 
           # Normalize the container export back into the stable input names that

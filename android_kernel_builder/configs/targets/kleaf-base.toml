@@ -1,15 +1,13 @@
 name = "kleaf-base"
 base = true
 
-[manifest]
-source = "remote"
+[repo]
 url = "https://android.googlesource.com/kernel/manifest"
 file = "default.xml"
 minimal = true
 autodetect_deprecated = true
 
-[build]
-system = "kleaf"
+[kleaf]
 target = "//common:kernel_{arch}_dist"
 warmup_target = "//common:kernel_{arch}"
 dist_flag = "dist_dir"

@@ -13,7 +13,7 @@ from typing import cast
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src").resolve()))
 
-from android_kernel_builder.builder.targets import load_target_payload_with_inheritance
+from android_kernel_builder.builder.core.config import KleafBuildConfig, LegacyBuildConfig, TargetConfigProvider
 
 
 def _run(command: list[str]) -> str:
@@ -101,14 +101,29 @@ def _resolve_image_digest(image_ref: str) -> str:
     return ""
 
 
-def _load_target_payload(source_target_file: str) -> dict[str, object]:
-    if not source_target_file:
+def _load_target_payload(target_name: str) -> dict[str, object]:
+    if not target_name:
         return {}
-    target_path = Path(source_target_file)
-    if not target_path.exists():
+    try:
+        target = TargetConfigProvider(Path.cwd()).load(target_name)
+    except (FileNotFoundError, ValueError):
         return {}
-    payload, _ = load_target_payload_with_inheritance(target_path)
-    return payload
+    return {
+        "name": target.name,
+        "repo": {
+            "branch": target.sync.branch,
+        },
+        "build": {
+            "system": _build_system_name(target.build),
+            "dist_dir": target.build.dist_dir,
+        },
+    }
+
+
+def _build_system_name(build_config: KleafBuildConfig | LegacyBuildConfig) -> str:
+    if isinstance(build_config, KleafBuildConfig):
+        return "kleaf"
+    return "legacy"
 
 
 def _resolve_summary_path(summary_file: str | None) -> Path:
@@ -123,7 +138,6 @@ def _resolve_summary_path(summary_file: str | None) -> Path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Write CI image/kernel summary into GitHub step summary")
     parser.add_argument("--image-ref", default="")
-    parser.add_argument("--source-target-file", default="")
     parser.add_argument("--target-input", default="")
     parser.add_argument("--build-duration-seconds", default="0")
     parser.add_argument("--build-step-outcome", default="")
@@ -137,7 +151,6 @@ def main() -> int:
     summary_path = _resolve_summary_path(args.summary_file)
 
     image_ref = args.image_ref
-    source_target_file = args.source_target_file
     target_input = args.target_input
     build_step_outcome = args.build_step_outcome
     push_requested = str(args.push_requested).lower() == "true"
@@ -147,20 +160,20 @@ def main() -> int:
     if image_ref:
         image_digest = _resolve_image_digest(image_ref)
 
-    target_payload = _load_target_payload(source_target_file)
+    target_payload = _load_target_payload(target_input)
     target_name = str(target_payload.get("name") or target_input)
-    manifest_payload_obj = target_payload.get("manifest")
-    if isinstance(manifest_payload_obj, dict):
-        manifest_payload: dict[str, object] = cast(dict[str, object], manifest_payload_obj)
+    repo_payload_obj = target_payload.get("repo")
+    if isinstance(repo_payload_obj, dict):
+        repo_payload: dict[str, object] = cast(dict[str, object], repo_payload_obj)
     else:
-        manifest_payload = {}
+        repo_payload = {}
     build_payload_obj = target_payload.get("build")
     if isinstance(build_payload_obj, dict):
         build_payload: dict[str, object] = cast(dict[str, object], build_payload_obj)
     else:
         build_payload = {}
 
-    kernel_branch = str(manifest_payload.get("branch") or "")
+    kernel_branch = str(repo_payload.get("branch") or "")
 
     build_system = str(build_payload.get("system") or "N/A")
     dist_dir = str(build_payload.get("dist_dir") or target_name or "N/A")
@@ -191,7 +204,6 @@ def main() -> int:
         "",
         "| Item | Value |",
         "|---|---|",
-        f"| Source Target File | `{source_target_file or 'N/A'}` |",
         f"| Requested Target Input | `{target_input or 'N/A'}` |",
         f"| Target Name | `{target_name or 'N/A'}` |",
         f"| Kernel Branch/Tag | `{kernel_branch or 'N/A'}` |",

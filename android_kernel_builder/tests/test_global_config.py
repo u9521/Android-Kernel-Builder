@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-global_config = importlib.import_module("android_kernel_builder.builder.global_config")
+global_config = importlib.import_module("android_kernel_builder.builder.core.config.global_config")
 
 
 class GlobalConfigTests(unittest.TestCase):

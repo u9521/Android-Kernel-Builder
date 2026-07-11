@@ -9,15 +9,7 @@ authors = [{ name = "u9521" }]
 dependencies = []
 
 [project.scripts]
-akb = "android_kernel_builder.builder.cli:main"
-show-target = "android_kernel_builder.builder.commands.show_target:main"
-sync-source = "android_kernel_builder.builder.commands.sync_source:main"
-build = "android_kernel_builder.builder.commands.build:main"
-warmup-build = "android_kernel_builder.builder.commands.warmup_build:main"
-build-docker = "android_kernel_builder.builder.commands.docker:main"
-cache = "android_kernel_builder.builder.commands.cache:main"
-tools = "android_kernel_builder.builder.commands.tools:main"
-image-env = "android_kernel_builder.builder.commands.image_env:main"
+akb = "android_kernel_builder.builder.cli.app:main"
 
 [build-system]
 requires = ["uv_build>=0.11.27,<0.12"]

@@ -34,13 +34,11 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 ## Common Commands
 
 - CLI help: `uv run akb --help`
-- Show target: `uv run show-target --target android15-6.6`
-- Sync source: `uv run sync-source --target android15-6.6`
-- Build target: `uv run build --target android15-6.6`
-- Warm caches: `uv run warmup-build --target android15-6.6`
-- Build Docker base image: `uv run build-docker build-base --tag ghcr.io/<owner>/gki-base:bookworm`
-- Build Docker workspace image: `uv run build-docker build-workspace --tag <tag> --base-image <base> --target android15-6.6`
-- Build Docker snapshot image: `uv run build-docker build-snapshot --tag <tag> --base-image <base> --target android15-6.6`
+- Show target: `uv run akb show-target --target android15-6.6`
+- Sync source: `uv run akb sync-source --target android15-6.6`
+- Build target: `uv run akb build --target android15-6.6`
+- Warm caches: `uv run akb warmup-build --target android15-6.6`
+- Build Docker snapshot image: `docker buildx build --allow security.insecure -f android_kernel_builder/docker/snapshot.Dockerfile --build-arg TARGET=android15-6.6 -t <tag> .`
 
 ## Test Commands
 
@@ -63,7 +61,7 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 - If you change host/docker layout resolution, run:
   - `uv run python -m unittest android_kernel_builder.tests.test_layout android_kernel_builder.tests.test_target_store`
 - If you change Docker packaging or runtime layout, run:
-  - `uv run python -m unittest android_kernel_builder.tests.test_image_env android_kernel_builder.tests.test_image_package android_kernel_builder.tests.test_docker android_kernel_builder.tests.test_snapshot`
+  - `uv run python -m unittest android_kernel_builder.tests.test_image_env android_kernel_builder.tests.test_snapshot`
 
 ## Architecture Notes
 

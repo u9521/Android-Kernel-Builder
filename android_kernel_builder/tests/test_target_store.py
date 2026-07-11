@@ -12,7 +12,7 @@ import unittest
 from unittest import mock
 
 layout = importlib.import_module("android_kernel_builder.builder.layout")
-target_store = importlib.import_module("android_kernel_builder.builder.targets.store")
+target_store = importlib.import_module("android_kernel_builder.builder.core.config.resolver")
 
 
 class TargetStoreTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class TargetStoreTests(unittest.TestCase):
             target = target_store.load_project_target(project_root, "sample")
 
         self.assertEqual(target.name, "sample")
-        self.assertEqual(target.manifest.path, layout.target_manifests_root(project_root) / "default.xml")
+        self.assertEqual(target.sync.path, layout.target_manifests_root(project_root) / "default.xml")
 
     def test_resolve_target_uses_akb_target_environment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -63,7 +63,7 @@ class TargetStoreTests(unittest.TestCase):
 name = "sample-base"
 base = true
 
-[manifest]
+[repo]
 url = "https://example.com/manifest"
 """,
             )
@@ -83,13 +83,11 @@ url = "https://example.com/manifest"
         return f"""
 name = "{name}"
 
-[manifest]
-source = "local"
+[repo]
 url = "https://example.com/manifest"
 path = "default.xml"
 
-[build]
-system = "kleaf"
+[kleaf]
 arch = "aarch64"
 """
 
@@ -97,13 +95,11 @@ arch = "aarch64"
         return f"""
 name = "{name}"
 
-[manifest]
-source = "remote"
+[repo]
 url = "https://example.com/manifest"
 branch = "common-android15-6.6"
 
-[build]
-system = "kleaf"
+[kleaf]
 arch = "aarch64"
 """
 

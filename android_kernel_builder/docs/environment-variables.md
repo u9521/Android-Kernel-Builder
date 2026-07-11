@@ -8,10 +8,6 @@ Docker images run from `/workspace`. Commands must be run from the AKB project r
 
 - Active target name embedded into the Docker image.
 
-### `AKB_TARGET_NAME`
-
-- Same target name as `AKB_TARGET`, exported for downstream build scripts.
-
 ### `AKB_SOURCE_ROOT`
 
 - Synced kernel source root inside the container.
@@ -35,14 +31,6 @@ Docker images run from `/workspace`. Commands must be run from the AKB project r
 - `AKB_WARMUP_TARGET`
 - `AKB_DIST_DIR`
 - `AKB_DIST_FLAG`
-
-## Manifest Metadata Variables
-
-- `AKB_MANIFEST_SOURCE`
-- `AKB_MANIFEST_URL`
-- `AKB_MANIFEST_BRANCH`
-- `AKB_MANIFEST_FILE`
-- `AKB_MANIFEST_PATH`
 
 ## Common Paths
 

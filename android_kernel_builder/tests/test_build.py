@@ -9,23 +9,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-build = importlib.import_module("android_kernel_builder.builder.build")
-build_systems = importlib.import_module("android_kernel_builder.builder.build_systems")
-kleaf = importlib.import_module("android_kernel_builder.builder.build_systems.kleaf")
-legacy = importlib.import_module("android_kernel_builder.builder.build_systems.legacy")
-targets = importlib.import_module("android_kernel_builder.builder.targets")
+build = importlib.import_module("android_kernel_builder.builder.core.build")
+kleaf = importlib.import_module("android_kernel_builder.builder.core.build.engines.kleaf")
+legacy = importlib.import_module("android_kernel_builder.builder.core.build.engines.legacy")
+targets = importlib.import_module("android_kernel_builder.builder.core.config")
 layout = importlib.import_module("android_kernel_builder.builder.layout")
 usage_report = importlib.import_module("android_kernel_builder.builder.usage_report")
 
 
 class BuildUsageTests(unittest.TestCase):
-    def test_build_system_specs_include_supported_build_systems(self) -> None:
-        supported_systems = set(build_systems.supported_build_systems())
-
-        self.assertEqual(supported_systems, {"kleaf", "legacy"})
-        self.assertEqual(build_systems.get_build_system_spec("kleaf").name, "kleaf")
-        self.assertEqual(build_systems.get_build_system_spec("legacy").name, "legacy")
-
     def test_build_kernel_formats_legacy_config_with_arch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
@@ -37,9 +29,8 @@ class BuildUsageTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample-legacy",
-                manifest=targets.ManifestConfig(source="remote"),
-                build=targets.BuildConfig(
-                    system="legacy",
+                sync=targets.RepoConfig(),
+                build=targets.LegacyBuildConfig(
                     arch="aarch64",
                     dist_dir="dist",
                     legacy_config="common/build.config.gki.{arch}",
@@ -101,9 +92,8 @@ class BuildUsageTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample-legacy",
-                manifest=targets.ManifestConfig(source="remote"),
-                build=targets.BuildConfig(
-                    system="legacy",
+                sync=targets.RepoConfig(),
+                build=targets.LegacyBuildConfig(
                     arch="aarch64",
                     dist_dir="dist",
                     legacy_config="common/build.config.gki.{arch}",
@@ -164,8 +154,8 @@ class BuildUsageTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample",
-                manifest=targets.ManifestConfig(source="remote"),
-                build=targets.BuildConfig(system="kleaf", arch="aarch64", dist_dir="dist"),
+                sync=targets.RepoConfig(),
+                build=targets.KleafBuildConfig(arch="aarch64", dist_dir="dist"),
                 config_path=Path("sample.toml"),
             )
 
@@ -197,13 +187,13 @@ class BuildUsageTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample",
-                manifest=targets.ManifestConfig(source="remote"),
-                build=targets.BuildConfig(system="kleaf", arch="aarch64", target="//common:kernel_{arch}_dist"),
+                sync=targets.RepoConfig(),
+                build=targets.KleafBuildConfig(arch="aarch64", target="//common:kernel_{arch}_dist"),
                 config_path=Path("sample.toml"),
             )
 
             with mock.patch.object(kleaf, "run_command", return_value=mock.Mock(stdout="")) as run_command:
-                kleaf.build(target, source_dir, cache_root, output_dir, {})
+                kleaf.build(target.build, source_dir, cache_root, output_dir, {})
 
             command = run_command.call_args_list[0].args[0]
             self.assertIn(f"--output_base={(cache_root / 'bazel' / 'state').resolve()}", command)
@@ -231,13 +221,13 @@ class BuildUsageTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample",
-                manifest=targets.ManifestConfig(source="remote"),
-                build=targets.BuildConfig(system="kleaf", arch="aarch64", warmup_target="//common:kernel_{arch}"),
+                sync=targets.RepoConfig(),
+                build=targets.KleafBuildConfig(arch="aarch64", warmup_target="//common:kernel_{arch}"),
                 config_path=Path("sample.toml"),
             )
 
             with mock.patch.object(kleaf, "run_command", return_value=mock.Mock(stdout="one\ntwo\n")) as run_command:
-                outputs = kleaf.query_warmup_outputs(target, source_dir, cache_root, {})
+                outputs = kleaf.query_warmup_outputs(target.build, source_dir, cache_root, {})
 
             command = run_command.call_args_list[0].args[0]
             self.assertEqual(outputs, ["one", "two"])
@@ -279,9 +269,8 @@ class BuildUsageTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample",
-                manifest=targets.ManifestConfig(source="remote"),
-                build=targets.BuildConfig(
-                    system="kleaf",
+                sync=targets.RepoConfig(),
+                build=targets.KleafBuildConfig(
                     arch="aarch64",
                     target="//common:kernel_{arch}_dist",
                     warmup_target="//common:kernel_{arch}",
@@ -303,8 +292,8 @@ class BuildUsageTests(unittest.TestCase):
     def test_warmup_kernel_falls_back_to_full_build_without_warmup_target(self) -> None:
         target = targets.TargetConfig(
             name="sample",
-            manifest=targets.ManifestConfig(source="remote"),
-            build=targets.BuildConfig(system="kleaf", arch="aarch64"),
+            sync=targets.RepoConfig(),
+            build=targets.KleafBuildConfig(arch="aarch64"),
             config_path=Path("sample.toml"),
         )
 
@@ -317,8 +306,8 @@ class BuildUsageTests(unittest.TestCase):
     def test_warmup_kernel_routes_legacy_to_build_implementation(self) -> None:
         target = targets.TargetConfig(
             name="sample-legacy",
-            manifest=targets.ManifestConfig(source="remote"),
-            build=targets.BuildConfig(system="legacy", arch="aarch64", legacy_config="common/build.config.gki.{arch}"),
+            sync=targets.RepoConfig(),
+            build=targets.LegacyBuildConfig(arch="aarch64", legacy_config="common/build.config.gki.{arch}"),
             config_path=Path("sample-legacy.toml"),
         )
 
@@ -339,15 +328,15 @@ class BuildUsageTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample",
-                manifest=targets.ManifestConfig(source="remote"),
-                build=targets.BuildConfig(system="kleaf", arch="aarch64", warmup_target="//common:kernel_{arch}"),
+                sync=targets.RepoConfig(),
+                build=targets.KleafBuildConfig(arch="aarch64", warmup_target="//common:kernel_{arch}"),
                 config_path=Path("sample.toml"),
             )
 
             with mock.patch.object(kleaf, "query_warmup_outputs", return_value=[
                 "bazel-out/k8-fastbuild/bin/common/kernel_aarch64/vmlinux"
             ]):
-                exported = kleaf.export_warmup_outputs(target, source_dir, temp_root / ".cache", output_dir, {})
+                exported = kleaf.export_warmup_outputs(target.build, source_dir, temp_root / ".cache", output_dir, {})
 
             destination = output_dir / "common" / "kernel_aarch64" / "vmlinux"
             self.assertEqual(destination.read_bytes(), b"kernel")
