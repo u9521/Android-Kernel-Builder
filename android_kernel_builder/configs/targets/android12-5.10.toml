@@ -1,6 +1,5 @@
 name = "android12-5.10"
 extends = "legacy-base"
 
-[manifest]
+[repo]
 branch = "common-android12-5.10"
-

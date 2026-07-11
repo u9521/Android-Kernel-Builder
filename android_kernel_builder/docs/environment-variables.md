@@ -36,14 +36,6 @@ Docker images run from `/workspace`. Commands must be run from the AKB project r
 - `AKB_DIST_DIR`
 - `AKB_DIST_FLAG`
 
-## Manifest Metadata Variables
-
-- `AKB_MANIFEST_SOURCE`
-- `AKB_MANIFEST_URL`
-- `AKB_MANIFEST_BRANCH`
-- `AKB_MANIFEST_FILE`
-- `AKB_MANIFEST_PATH`
-
 ## Common Paths
 
 - Source checkout: `/workspace/source-code/${AKB_TARGET}`

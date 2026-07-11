@@ -76,25 +76,31 @@ jobs:
           set -euo pipefail
           start_ts=$(date +%s)
           image_ref="ghcr.io/${{ github.repository_owner }}/${{ matrix.image_repo }}:${{ inputs.tag }}"
-          push_args=()
+          output_args=()
 
           if [ "${{ inputs.push_image }}" = "true" ]; then
-            push_args+=(--push)
+            output_args+=(--push)
+          else
+            output_args+=(--load)
           fi
 
+          dockerfile="android_kernel_builder/docker/${{ matrix.image_name }}.Dockerfile"
+          build_args=(
+            --allow security.insecure
+            --file "$dockerfile"
+            --build-arg "BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm"
+            --build-arg "TARGET=${{ inputs.target }}"
+            --tag "$image_ref"
+          )
+
           if [ "${{ matrix.image_name }}" = "workspace" ]; then
-            uv run build-docker build-workspace \
-              --tag "$image_ref" \
-              --base-image "ghcr.io/${{ github.repository_owner }}/gki-base:bookworm" \
-              --target "${{ inputs.target }}" \
-              "${push_args[@]}"
+            docker buildx build "${build_args[@]}" "${output_args[@]}" .
           else
-            uv run build-docker build-snapshot \
-              --tag "$image_ref" \
-              --base-image "ghcr.io/${{ github.repository_owner }}/gki-base:bookworm" \
-              --target "${{ inputs.target }}" \
-              --snapshot-git-projects "${{ matrix.snapshot_git_projects }}" \
-              "${push_args[@]}"
+            docker buildx build \
+              "${build_args[@]}" \
+              --build-arg "SNAPSHOT_GIT_PROJECTS=${{ matrix.snapshot_git_projects }}" \
+              "${output_args[@]}" \
+              .
           fi
 
           end_ts=$(date +%s)
@@ -107,7 +113,6 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.build_image.outputs.image_ref }}
           BUILD_DURATION_SECONDS: ${{ steps.build_image.outputs.build_duration_seconds }}
-          SOURCE_TARGET_FILE: android_kernel_builder/configs/targets/${{ inputs.target }}.toml
           TARGET_INPUT: ${{ inputs.target }}
           BUILD_STEP_OUTCOME: ${{ steps.build_image.outcome }}
           PUSH_REQUESTED: ${{ steps.build_image.outputs.push_requested }}
@@ -115,7 +120,6 @@ jobs:
           set -euo pipefail
           uv run python android_kernel_builder/scripts/write-ci-build-summary.py \
             --image-ref "$IMAGE_REF" \
-            --source-target-file "$SOURCE_TARGET_FILE" \
             --target-input "$TARGET_INPUT" \
             --build-duration-seconds "$BUILD_DURATION_SECONDS" \
             --build-step-outcome "$BUILD_STEP_OUTCOME" \

@@ -36,16 +36,22 @@ Required target fields:
 ```toml
 name = "android15-6.6"
 
-[manifest]
-source = "remote"
+[repo]
 url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android15-6.6"
 
-[build]
-system = "kleaf"
+[kleaf]
 arch = "aarch64"
 ```
 
-Optional target-specific build fields include `target`, `warmup_target`, `dist_dir`, `dist_flag`, `jobs`, `lto`, and `legacy_config`. The `[cache]` section is ignored; cache subdirectory names are fixed by the AKB layout.
+Sync configuration currently uses the `[repo]` table. Its fields include `url`, `branch`, `file`, `path`, `minimal`, and `autodetect_deprecated`.
 
-The `[workspace]` section has been removed. Any workspace path configuration now raises an error.
+Build configuration must use exactly one backend table: `[kleaf]` or `[legacy]`.
+
+Kleaf build fields include `target`, `warmup_target`, `dist_dir`, `dist_flag`, `arch`, `jobs`, and `lto`.
+
+Legacy build fields include `legacy_config`, `dist_dir`, `arch`, `jobs`, `lto`, and `use_ccache`.
+
+The `[cache]` section is ignored; cache subdirectory names are fixed by the AKB layout.
+
+The `[workspace]` section is ignored.

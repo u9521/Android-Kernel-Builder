@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 layout = importlib.import_module("android_kernel_builder.builder.layout")
-snapshot = importlib.import_module("android_kernel_builder.builder.snapshot")
+snapshot = importlib.import_module("android_kernel_builder.builder.extensions.snapshot")
 
 
 class SnapshotTests(unittest.TestCase):
@@ -69,13 +69,11 @@ class SnapshotTests(unittest.TestCase):
             """
 name = "sample"
 
-[manifest]
-source = "remote"
+[repo]
 url = "https://example.com/manifest"
 branch = "common-android15-6.6"
 
-[build]
-system = "kleaf"
+[kleaf]
 arch = "aarch64"
 """.strip()
             + "\n",

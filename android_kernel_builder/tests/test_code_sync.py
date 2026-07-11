@@ -8,10 +8,10 @@ import tempfile
 import unittest
 from unittest import mock
 
-code_sync = importlib.import_module("android_kernel_builder.builder.code_sync")
-code_sync_repo = importlib.import_module("android_kernel_builder.builder.code_sync.repo")
-code_sync_sync = importlib.import_module("android_kernel_builder.builder.code_sync.sync")
-targets = importlib.import_module("android_kernel_builder.builder.targets")
+code_sync = importlib.import_module("android_kernel_builder.builder.core.sync")
+code_sync_repo = importlib.import_module("android_kernel_builder.builder.core.sync.repo")
+code_sync_sync = importlib.import_module("android_kernel_builder.builder.core.sync.sync")
+targets = importlib.import_module("android_kernel_builder.builder.core.config")
 
 
 class CodeSyncHelpersTests(unittest.TestCase):
@@ -25,8 +25,8 @@ class CodeSyncHelpersTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample-kleaf",
-                manifest=targets.ManifestConfig(source="remote", url="https://example.com/manifest", branch="common-android15-6.6"),
-                build=targets.BuildConfig(system="kleaf"),
+                sync=targets.RepoConfig(url="https://example.com/manifest", branch="common-android15-6.6"),
+                build=targets.KleafBuildConfig(),
                 config_path=Path("sample-kleaf.toml"),
             )
 
@@ -53,8 +53,8 @@ class CodeSyncHelpersTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample-legacy",
-                manifest=targets.ManifestConfig(source="remote", url="https://example.com/manifest", branch="common-android12-5.10"),
-                build=targets.BuildConfig(system="legacy", legacy_config="common/build.config.gki.{arch}"),
+                sync=targets.RepoConfig(url="https://example.com/manifest", branch="common-android12-5.10"),
+                build=targets.LegacyBuildConfig(legacy_config="common/build.config.gki.{arch}"),
                 config_path=Path("sample-legacy.toml"),
             )
 
@@ -77,8 +77,8 @@ class CodeSyncHelpersTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample-legacy",
-                manifest=targets.ManifestConfig(source="remote", url="https://example.com/manifest", branch="common-android12-5.10"),
-                build=targets.BuildConfig(system="legacy", legacy_config="common/build.config.gki.{arch}", use_ccache=False),
+                sync=targets.RepoConfig(url="https://example.com/manifest", branch="common-android12-5.10"),
+                build=targets.LegacyBuildConfig(legacy_config="common/build.config.gki.{arch}", use_ccache=False),
                 config_path=Path("sample-legacy.toml"),
             )
 
@@ -107,8 +107,8 @@ class CodeSyncHelpersTests(unittest.TestCase):
 
             target = targets.TargetConfig(
                 name="sample-kleaf",
-                manifest=targets.ManifestConfig(source="remote", url="https://example.com/manifest", branch="common-android15-6.6"),
-                build=targets.BuildConfig(system="kleaf"),
+                sync=targets.RepoConfig(url="https://example.com/manifest", branch="common-android15-6.6"),
+                build=targets.KleafBuildConfig(),
                 config_path=Path("sample-kleaf.toml"),
             )
 
@@ -163,16 +163,15 @@ class CodeSyncHelpersTests(unittest.TestCase):
             )
 
     def test_skips_autodetect_when_disabled(self) -> None:
-        manifest = importlib.import_module("android_kernel_builder.builder.targets").ManifestConfig(
-            source="remote",
+        sync = importlib.import_module("android_kernel_builder.builder.core.config").RepoConfig(
             url="https://android.googlesource.com/kernel/manifest",
             branch="common-android14-6.1",
             autodetect_deprecated=False,
         )
-        target = importlib.import_module("android_kernel_builder.builder.targets").TargetConfig(
+        target = importlib.import_module("android_kernel_builder.builder.core.config").TargetConfig(
             name="sample",
-            manifest=manifest,
-            build=importlib.import_module("android_kernel_builder.builder.targets").BuildConfig(),
+            sync=sync,
+            build=importlib.import_module("android_kernel_builder.builder.core.config").KleafBuildConfig(),
             config_path=Path("sample.toml"),
         )
         self.assertIsNone(code_sync_repo._auto_fix_remote_deprecated_branch(target, Path(".")))

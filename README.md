@@ -54,13 +54,13 @@ Commands derive paths from the selected target and the current directory. Use `-
 Show the resolved target:
 
 ```bash
-uv run show-target --target android15-6.6
+uv run akb show-target --target android15-6.6
 ```
 
 Sync source for a host target:
 
 ```bash
-uv run sync-source --target android15-6.6
+uv run akb sync-source --target android15-6.6
 ```
 
 After `repo sync` completes, the command prints the selected source root and the size of each direct file or directory under it.
@@ -68,22 +68,28 @@ After `repo sync` completes, the command prints the selected source root and the
 Build a host target:
 
 ```bash
-uv run build --target android15-6.6
+uv run akb build --target android15-6.6
 ```
 
 Build the base image:
 
 ```bash
-uv run build-docker build-base --tag ghcr.io/<owner>/gki-base:bookworm
+docker buildx build \
+  -f android_kernel_builder/docker/base.Dockerfile \
+  -t ghcr.io/<owner>/gki-base:bookworm \
+  .
 ```
 
 Build a one-image-one-target workspace image:
 
 ```bash
-uv run build-docker build-workspace \
-  --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target android15-6.6
+docker buildx build \
+  --allow security.insecure \
+  -f android_kernel_builder/docker/workspace.Dockerfile \
+  --build-arg BASE_IMAGE=ghcr.io/<owner>/gki-base:bookworm \
+  --build-arg TARGET=android15-6.6 \
+  -t ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
+  .
 ```
 
 During final image cleanup, this removes everything under `/workspace/source-code/<target>/common` except `.git`, removes warmup outputs and cache contents, then prints the final workspace disk usage report.
@@ -91,21 +97,27 @@ During final image cleanup, this removes everything under `/workspace/source-cod
 Build and push the workspace image directly without loading it into the local Docker image store:
 
 ```bash
-uv run build-docker build-workspace \
-  --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target android15-6.6 \
-  --push
+docker buildx build \
+  --allow security.insecure \
+  -f android_kernel_builder/docker/workspace.Dockerfile \
+  --build-arg BASE_IMAGE=ghcr.io/<owner>/gki-base:bookworm \
+  --build-arg TARGET=android15-6.6 \
+  -t ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
+  --push \
+  .
 ```
 
 Build a one-image-one-target snapshot image:
 
 ```bash
-uv run build-docker build-snapshot \
-  --tag ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
-  --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target android15-6.6 \
-  --snapshot-git-projects common
+docker buildx build \
+  --allow security.insecure \
+  -f android_kernel_builder/docker/snapshot.Dockerfile \
+  --build-arg BASE_IMAGE=ghcr.io/<owner>/gki-base:bookworm \
+  --build-arg TARGET=android15-6.6 \
+  --build-arg SNAPSHOT_GIT_PROJECTS=common \
+  -t ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
+  .
 ```
 
 Snapshot images apply the same final cleanup and disk usage report after preserving the requested Git projects.
@@ -113,14 +125,15 @@ Snapshot images apply the same final cleanup and disk usage report after preserv
 Print the current workspace disk usage report:
 
 ```bash
-uv run print-usage-report
+uv run akb usage
 ```
 
 Run a built image:
 
 ```bash
-uv run build-docker run \
-  --image ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
+docker run --rm -it \
+  --privileged \
+  ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
   -- bash -lc 'cd "$AKB_SOURCE_ROOT" && tools/bazel help'
 ```
 
@@ -129,16 +142,16 @@ Recommended downstream CI build cache flow inside the container:
 ```bash
 bash -lc '
   set -euo pipefail
-  trap "uv run cache export || true" EXIT
-  uv run cache init
-  uv run build
+  trap "uv run akb cache export || true" EXIT
+  uv run akb cache init
+  uv run akb build
 '
 ```
 
 Add directories to global Git safe.directory:
 
 ```bash
-uv run tools add-git-safe /path/to/workspace -r
+uv run akb tools add-git-safe /path/to/workspace -r
 ```
 
 This command updates both global and system `safe.directory` scopes.
@@ -146,16 +159,17 @@ This command updates both global and system `safe.directory` scopes.
 ## Docker Behavior
 
 - Docker runtime commands run from `/workspace`, matching the same project-root layout used on host.
-- Docker image packaging generates `.docker-target/target.toml` as a flattened single-target config for the selected image build; when that target uses a local manifest, the referenced file is bundled as `.docker-target/manifest.xml` and `manifest.path` is rewritten to match.
+- Docker image builds use the checked-in target configs directly and select the target with the Docker build arg `TARGET`.
+- The base Dockerfile delegates package installation to `android_kernel_builder/docker/install-base-deps.sh`.
 - The entrypoint loads `/workspace/docker_datas/akb.env`.
 - That env file exports target, build, and manifest metadata for downstream CI scripts.
-- Workspace images run `uv run sync-source`, create a sparse `container_cache.img`, mount it on `/workspace/cache/<target>`, then run `uv run warmup-build` during image build and remove warmup outputs before the final image layer completes.
+- Workspace images run `uv run akb sync-source`, create a sparse `container_cache.img`, mount it on `/workspace/cache/<target>`, then run `uv run akb warmup-build` during image build and remove warmup outputs before the final image layer completes.
 - Workspace and snapshot images remove every direct entry under `/workspace/source-code/<target>/common` except `.git` before the final image layer completes, reducing retained source checkout size while keeping the project Git history available.
-- Workspace and snapshot images run `uv run print-usage-report` after final cleanup so build logs include the final retained workspace disk usage.
-- `warmup-build` exports warmup outputs to `<output-root>/<dist_dir>` when `build.warmup_target` is configured.
-- Snapshot images run snapshot pruning before `uv run warmup-build`, preserving selected Git projects while removing `.repo` metadata.
+- Workspace and snapshot images run `uv run akb usage` after final cleanup so build logs include the final retained workspace disk usage.
+- `warmup-build` exports warmup outputs to `<output-root>/<dist_dir>` when `build.kleaf.warmup_target` is configured.
+- Snapshot images run snapshot pruning before `uv run akb warmup-build`, preserving selected Git projects while removing `.repo` metadata.
 - After snapshot pruning removes `.repo`, downstream flows should use Git commands inside preserved project directories instead of `repo` commands.
-- `build-docker build-base`, `build-docker build-workspace`, and `build-docker build-snapshot` accept `--push` to use `docker buildx build --push`, which avoids loading large images into the local Docker image store.
+- Docker image publishing uses `docker buildx build --push`, which avoids loading large images into the local Docker image store.
 - The image build no longer consumes external build caches. It always creates the base `container_cache.img` inside the image build, then shrinks it with `resize2fs -M`.
 - Build cache uses overlay mounts: image-baked `container_cache.img` is the lower read-only cache, and external `outer-cache.img` is the writable delta image.
 - The entrypoint does not manage cache mounts or exports; downstream CI should explicitly run `uv run cache init` and guarantee `uv run cache export` runs with a shell `trap` or equivalent cleanup step.
@@ -166,7 +180,7 @@ This command updates both global and system `safe.directory` scopes.
 
 - Kleaf builds rely on the kernel tree's `tools/bazel`.
 - Docker images are intended for CI/runtime use, not as full AKB development checkouts.
-- Local manifest support remains first-class, but embedded Docker manifests must stay inside the image manifest root.
+- Local manifest support remains first-class through checked-in configs under `android_kernel_builder/configs/manifests/`.
 
 ## Documentation
 

@@ -1,13 +1,11 @@
 name = "avd-base"
 base = true
 
-[manifest]
-source = "local"
+[repo]
 url = "https://android.googlesource.com/kernel/manifest"
 minimal = true
 
-[build]
-system = "kleaf"
+[kleaf]
 target = "//common-modules/virtual-device:virtual_device_{arch}_dist"
 warmup_target = "//common:kernel_{arch}"
 dist_flag = "dist_dir"

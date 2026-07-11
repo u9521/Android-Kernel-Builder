@@ -1,11 +1,11 @@
 name = "avd-android16-6.12-x64"
 extends = "avd-base"
 
-[manifest]
+[repo]
 branch = "common-android16-6.12"
 path = "avd/avd-android-16.1-6.12_x64.xml"
 
-[build]
+[kleaf]
 dist_flag = "destdir"
 arch = "x86_64"
 lto = "none"

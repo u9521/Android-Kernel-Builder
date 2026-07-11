@@ -9,7 +9,7 @@ import unittest
 from unittest import mock
 
 layout = importlib.import_module("android_kernel_builder.builder.layout")
-build_cache = importlib.import_module("android_kernel_builder.builder.build_cache.core")
+build_cache = importlib.import_module("android_kernel_builder.builder.extensions.cache.core")
 
 
 class BuildCacheTests(unittest.TestCase):

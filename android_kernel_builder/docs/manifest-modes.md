@@ -1,28 +1,27 @@
-# Manifest Modes
+# Repo Sync Modes
 
-AKB supports remote and local manifests.
+AKB currently supports Android `repo` manifest based source synchronization.
 
-## Remote Manifests
+## Remote Repo Manifests
 
-Remote manifests use `repo init -u <url> -b <branch>` and optionally `-m <file>`.
+Remote repo manifests use `repo init -u <url> -b <branch>` and optionally `-m <file>`.
 
 ```toml
-[manifest]
-source = "remote"
+[repo]
 url = "https://android.googlesource.com/kernel/manifest"
 branch = "common-android15-6.6"
 file = "default.xml"
+minimal = true
 ```
 
-## Local Manifests
+## Local Repo Manifests
 
-Local manifest paths are relative to `android_kernel_builder/configs/manifests/`.
+Local repo manifest paths are relative to `android_kernel_builder/configs/manifests/`.
 
 ```toml
-[manifest]
-source = "local"
+[repo]
 url = "https://android.googlesource.com/kernel/manifest"
+branch = "common-android15-6.6"
 path = "avd/default.xml"
+minimal = true
 ```
-
-Docker image packaging copies only the selected local manifest into the packaged target bundle and rewrites `manifest.path` accordingly.

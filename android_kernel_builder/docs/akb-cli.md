@@ -1,20 +1,16 @@
 # Command Line
 
-This document summarizes the current AKB commands. `akb` is a command index; build, Docker, cache, and tool operations use separate console scripts.
+This document summarizes the current AKB commands. `akb` is the only Python CLI entry point; all operations are subcommands.
 
 ## Common Flow
 
 Run AKB commands from the project root. Host and Docker runtime flows use the current project root as the work root:
 
-1. `show-target`
-2. `sync-source`
-3. `build`
+1. `akb show-target`
+2. `akb sync-source`
+3. `akb build`
 
-Docker image publishing flow:
-
-1. `build-docker build-base`
-2. `build-docker build-workspace` or `build-docker build-snapshot`
-3. `build-docker run`
+Docker image publishing is no longer handled by a Python `build-docker` command. Use `docker buildx build` directly with the Dockerfiles under `android_kernel_builder/docker/` and pass the selected target with `--build-arg TARGET=<target>`.
 
 ## Fixed Paths
 
@@ -29,113 +25,120 @@ Path override CLI flags have been removed. Use `--target` or `AKB_TARGET` to sel
 
 ## Commands
 
-### `show-target`
+### `akb show-target`
 
 Prints the resolved target as JSON.
 
 ```bash
-uv run show-target --target android15-6.6
+uv run akb show-target --target android15-6.6
 ```
 
-### `sync-source`
+### `akb sync-source`
 
 Runs `repo init` and `repo sync` for the selected target.
 
 ```bash
-uv run sync-source --target android15-6.6
+uv run akb sync-source --target android15-6.6
 ```
 
 After sync completes, the command prints the selected source root and direct source-root entry sizes, including both directories and files.
 
-### `build`
+### `akb build`
 
 Builds the configured kernel target and writes outputs under `out/<target>/<dist_dir>`.
 
 ```bash
-uv run build --target android15-6.6
+uv run akb build --target android15-6.6
 ```
 
-### `warmup-build`
+### `akb warmup-build`
 
-Warms caches for the selected target. Kleaf targets use `build.warmup_target` when configured.
+Warms caches for the selected target. Kleaf targets use `build.kleaf.warmup_target` when configured.
 
 ```bash
-uv run warmup-build --target android15-6.6
+uv run akb warmup-build --target android15-6.6
 ```
 
-### `build-docker build-base`
+### `akb image-env`
 
-Builds the minimal base image used by workspace and snapshot images.
+Writes Docker runtime metadata files under `docker_datas/` for the selected target.
 
 ```bash
-uv run build-docker build-base --tag ghcr.io/<owner>/gki-base:bookworm
+uv run akb image-env --target android15-6.6
 ```
 
-### `build-docker build-workspace`
-
-Builds a pre-warmed one-image-one-target CI image.
-
-```bash
-uv run build-docker build-workspace \
-  --tag ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target android15-6.6
-```
-
-The image build warms caches, removes everything under `/workspace/source-code/<target>/common` except `.git`, removes warmup outputs and cache contents, then prints the final workspace disk usage report.
-
-### `build-docker build-snapshot`
-
-Builds a snapshot-oriented one-image-one-target CI image.
-
-```bash
-uv run build-docker build-snapshot \
-  --tag ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
-  --base-image ghcr.io/<owner>/gki-base:bookworm \
-  --target android15-6.6 \
-  --snapshot-git-projects common
-```
-
-The image build snapshots the requested Git projects, warms caches, applies the same final `common` cleanup, then prints the final workspace disk usage report.
-
-### `print-usage-report`
+### `akb usage`
 
 Prints the current workspace disk usage report for the selected target. The target is resolved from `AKB_TARGET` or the only selectable target config in the current workspace.
 
 ```bash
-uv run print-usage-report
+uv run akb usage
 ```
 
-### `build-docker run`
-
-Runs an existing image with fixed `source-code`, `cache`, `out`, and `docker_datas/outerimage` mounts.
-
-```bash
-uv run build-docker run \
-  --image ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  -- bash -lc 'cd "$AKB_SOURCE_ROOT" && tools/bazel help'
-```
-
-### `cache init`
+### `akb cache init`
 
 Mounts the Docker build cache overlay at `cache/<target>`.
 
 ```bash
-uv run cache init
+uv run akb cache init
 ```
 
-### `cache export`
+### `akb cache export`
 
 Unmounts build cache mounts and exports `next-outer-cache.img/json`.
 
 ```bash
-uv run cache export
+uv run akb cache export
 ```
 
-### `tools add-git-safe`
+### `akb snapshot`
+
+Prunes a prepared workspace for snapshot-oriented image builds while preserving selected Git projects.
+
+```bash
+uv run akb snapshot --snapshot-git-projects common
+```
+
+### `akb tools add-git-safe`
 
 Adds the input directory to both global and system `git safe.directory`.
 
 ```bash
-uv run tools add-git-safe /path/to/workspace -r
+uv run akb tools add-git-safe /path/to/workspace -r
+```
+
+## Docker Image Builds
+
+Build the base image:
+
+```bash
+docker buildx build \
+  -f android_kernel_builder/docker/base.Dockerfile \
+  -t ghcr.io/<owner>/gki-base:bookworm \
+  .
+```
+
+Build a workspace image:
+
+```bash
+docker buildx build \
+  --allow security.insecure \
+  -f android_kernel_builder/docker/workspace.Dockerfile \
+  --build-arg BASE_IMAGE=ghcr.io/<owner>/gki-base:bookworm \
+  --build-arg TARGET=android15-6.6 \
+  -t ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
+  .
+```
+
+Build a snapshot image:
+
+```bash
+docker buildx build \
+  --allow security.insecure \
+  -f android_kernel_builder/docker/snapshot.Dockerfile \
+  --build-arg BASE_IMAGE=ghcr.io/<owner>/gki-base:bookworm \
+  --build-arg TARGET=android15-6.6 \
+  --build-arg SNAPSHOT_GIT_PROJECTS=common \
+  -t ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
+  .
 ```

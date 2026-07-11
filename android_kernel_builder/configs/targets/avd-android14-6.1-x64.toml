@@ -1,9 +1,9 @@
 name = "avd-android14-6.1-x64"
 extends = "avd-base"
 
-[manifest]
+[repo]
 branch = "common-android14-6.1"
 path = "avd/avd-android-14-6.1_x64.xml"
 
-[build]
+[kleaf]
 arch = "x86_64"

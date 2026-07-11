@@ -1,43 +1,30 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 u9521
 
-from __future__ import annotations
-
 import importlib
 import unittest
 
-build_systems = importlib.import_module("android_kernel_builder.builder.build_systems")
+config = importlib.import_module("android_kernel_builder.builder.core.config")
 
 
-class BuildSystemSpecTests(unittest.TestCase):
-    def test_supported_build_systems_include_kleaf_and_legacy(self) -> None:
-        supported = build_systems.supported_build_systems()
+class BuildConfigSchemaTests(unittest.TestCase):
+    def test_kleaf_defaults_are_backend_specific(self) -> None:
+        build = config.KleafBuildConfig()
 
-        self.assertIn("kleaf", supported)
-        self.assertIn("legacy", supported)
+        self.assertEqual(build.target, "//common:kernel_{arch}_dist")
+        self.assertEqual(build.dist_flag, "dist_dir")
+        self.assertEqual(build.arch, "aarch64")
+        self.assertFalse(hasattr(build, "legacy_config"))
+        self.assertFalse(hasattr(build, "use_ccache"))
 
-    def test_kleaf_defaults_use_ccache_to_false(self) -> None:
-        spec = build_systems.get_build_system_spec("kleaf")
+    def test_legacy_defaults_are_backend_specific(self) -> None:
+        build = config.LegacyBuildConfig(legacy_config="common/build.config.gki.{arch}")
 
-        if spec is None:
-            self.fail("kleaf spec must exist")
-        self.assertFalse(spec.default_use_ccache)
-        self.assertTrue(spec.supports_warmup)
-        self.assertFalse(spec.supports_ccache)
-
-    def test_legacy_defaults_use_ccache_to_true(self) -> None:
-        spec = build_systems.get_build_system_spec("legacy")
-
-        if spec is None:
-            self.fail("legacy spec must exist")
-        self.assertTrue(spec.default_use_ccache)
-        self.assertFalse(spec.supports_warmup)
-        self.assertTrue(spec.supports_ccache)
-
-    def test_unknown_build_system_returns_none(self) -> None:
-        spec = build_systems.get_build_system_spec("unknown")
-
-        self.assertIsNone(spec)
+        self.assertEqual(build.legacy_config, "common/build.config.gki.{arch}")
+        self.assertEqual(build.arch, "aarch64")
+        self.assertTrue(build.use_ccache)
+        self.assertFalse(hasattr(build, "target"))
+        self.assertFalse(hasattr(build, "warmup_target"))
 
 
 if __name__ == "__main__":
