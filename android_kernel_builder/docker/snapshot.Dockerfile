@@ -2,8 +2,17 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 u9521
 
-ARG BASE_IMAGE=ghcr.io/u9521/gki-base:latest
-FROM ${BASE_IMAGE}
+FROM debian:bookworm-slim
+
+LABEL org.opencontainers.image.description="Snapshot environment for building GKI kernels"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+COPY android_kernel_builder/docker/install-base-deps.sh /usr/local/bin/install-base-deps
+RUN chmod +x /usr/local/bin/install-base-deps \
+    && /usr/local/bin/install-base-deps
 
 ARG TARGET=android15-6.6
 ARG SNAPSHOT_GIT_PROJECTS=common

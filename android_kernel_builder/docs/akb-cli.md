@@ -109,34 +109,12 @@ uv run akb tools add-git-safe /path/to/workspace -r
 
 ## Docker Image Builds
 
-Build the base image:
-
-```bash
-docker buildx build \
-  -f android_kernel_builder/docker/base.Dockerfile \
-  -t ghcr.io/<owner>/gki-base:bookworm \
-  .
-```
-
-Build a workspace image:
-
-```bash
-docker buildx build \
-  --allow security.insecure \
-  -f android_kernel_builder/docker/workspace.Dockerfile \
-  --build-arg BASE_IMAGE=ghcr.io/<owner>/gki-base:bookworm \
-  --build-arg TARGET=android15-6.6 \
-  -t ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
-  .
-```
-
 Build a snapshot image:
 
 ```bash
 docker buildx build \
   --allow security.insecure \
   -f android_kernel_builder/docker/snapshot.Dockerfile \
-  --build-arg BASE_IMAGE=ghcr.io/<owner>/gki-base:bookworm \
   --build-arg TARGET=android15-6.6 \
   --build-arg SNAPSHOT_GIT_PROJECTS=common \
   -t ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \

@@ -31,7 +31,7 @@ class WriteCiBuildSummaryTests(unittest.TestCase):
             args = [
                 "write-ci-build-summary.py",
                 "--image-ref",
-                "ghcr.io/example/gki-workspace:test",
+                "ghcr.io/example/gki-snapshot:test",
                 "--target-input",
                 "android15-6.6",
                 "--build-duration-seconds",

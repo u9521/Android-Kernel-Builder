@@ -78,18 +78,6 @@ def docker_root(project_root: Path) -> Path:
     return project_package_root(project_root) / DOCKER_DIR_NAME
 
 
-def base_dockerfile(project_root: Path) -> Path:
-    return docker_root(project_root) / "base.Dockerfile"
-
-
-def workspace_dockerfile(project_root: Path) -> Path:
-    return docker_root(project_root) / "workspace.Dockerfile"
-
-
-def snapshot_dockerfile(project_root: Path) -> Path:
-    return docker_root(project_root) / "snapshot.Dockerfile"
-
-
 def target_source_root(work_root: Path, target_name: str) -> Path:
     return work_root / SOURCE_CODE_DIR_NAME / target_name
 

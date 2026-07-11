@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 u9521
 
-name: build-container-images
+name: build-snapshot-image
 
 on:
   workflow_dispatch:
@@ -15,25 +15,15 @@ on:
         required: true
         default: android15-6.6-latest
       push_image:
-        description: Push built images to GHCR
+        description: Push built image to GHCR
         required: true
         type: boolean
         default: true
 
 jobs:
   build:
-    name: Build ${{ matrix.image_name }} image
+    name: Build snapshot image
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # - image_name: workspace
-          #   image_repo: gki-workspace
-          #   snapshot_git_projects: ""
-          - image_name: snapshot
-            image_repo: gki-snapshot
-            snapshot_git_projects: common
     permissions:
       contents: read
       packages: write
@@ -70,12 +60,12 @@ jobs:
             exit 1
           fi
 
-      - name: Build ${{ matrix.image_name }} image
+      - name: Build snapshot image
         id: build_image
         run: |
           set -euo pipefail
           start_ts=$(date +%s)
-          image_ref="ghcr.io/${{ github.repository_owner }}/${{ matrix.image_repo }}:${{ inputs.tag }}"
+          image_ref="ghcr.io/${{ github.repository_owner }}/gki-snapshot:${{ inputs.tag }}"
           output_args=()
 
           if [ "${{ inputs.push_image }}" = "true" ]; then
@@ -84,24 +74,14 @@ jobs:
             output_args+=(--load)
           fi
 
-          dockerfile="android_kernel_builder/docker/${{ matrix.image_name }}.Dockerfile"
-          build_args=(
-            --allow security.insecure
-            --file "$dockerfile"
-            --build-arg "BASE_IMAGE=ghcr.io/${{ github.repository_owner }}/gki-base:bookworm"
-            --build-arg "TARGET=${{ inputs.target }}"
-            --tag "$image_ref"
-          )
-
-          if [ "${{ matrix.image_name }}" = "workspace" ]; then
-            docker buildx build "${build_args[@]}" "${output_args[@]}" .
-          else
-            docker buildx build \
-              "${build_args[@]}" \
-              --build-arg "SNAPSHOT_GIT_PROJECTS=${{ matrix.snapshot_git_projects }}" \
-              "${output_args[@]}" \
-              .
-          fi
+          docker buildx build \
+            --allow security.insecure \
+            --file android_kernel_builder/docker/snapshot.Dockerfile \
+            --build-arg "TARGET=${{ inputs.target }}" \
+            --build-arg "SNAPSHOT_GIT_PROJECTS=common" \
+            --tag "$image_ref" \
+            "${output_args[@]}" \
+            .
 
           end_ts=$(date +%s)
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"

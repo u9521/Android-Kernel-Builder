@@ -40,8 +40,8 @@ jobs:
 
       # Pull the image that already contains synced source, embedded target
       # metadata, and the baked-in base cache image.
-      - name: Pull pre-warmed workspace image
-        run: docker pull ghcr.io/<owner>/gki-workspace:android15-6.6-latest
+      - name: Pull pre-warmed snapshot image
+        run: docker pull ghcr.io/<owner>/gki-snapshot:android15-6.6-latest
 
       # Run the downstream build inside the container.
       #
@@ -72,7 +72,7 @@ jobs:
             -v "$PWD":"$DOWNSTREAM_ROOT" \
             -v "$PWD/.outer-cache":/workspace/docker_datas/outerimage \
             -v "$PWD/out":/workspace/out \
-            ghcr.io/<owner>/gki-workspace:android15-6.6-latest \
+            ghcr.io/<owner>/gki-snapshot:android15-6.6-latest \
             bash -lc '
               set -euo pipefail
 

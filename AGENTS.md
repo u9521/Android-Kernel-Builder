@@ -38,9 +38,7 @@ Guidance for coding agents working in `Android-Kernel-Builder`.
 - Sync source: `uv run akb sync-source --target android15-6.6`
 - Build target: `uv run akb build --target android15-6.6`
 - Warm caches: `uv run akb warmup-build --target android15-6.6`
-- Build Docker base image: `docker buildx build -f android_kernel_builder/docker/base.Dockerfile -t ghcr.io/<owner>/gki-base:bookworm .`
-- Build Docker workspace image: `docker buildx build --allow security.insecure -f android_kernel_builder/docker/workspace.Dockerfile --build-arg BASE_IMAGE=<base> --build-arg TARGET=android15-6.6 -t <tag> .`
-- Build Docker snapshot image: `docker buildx build --allow security.insecure -f android_kernel_builder/docker/snapshot.Dockerfile --build-arg BASE_IMAGE=<base> --build-arg TARGET=android15-6.6 -t <tag> .`
+- Build Docker snapshot image: `docker buildx build --allow security.insecure -f android_kernel_builder/docker/snapshot.Dockerfile --build-arg TARGET=android15-6.6 -t <tag> .`
 
 ## Test Commands
 
